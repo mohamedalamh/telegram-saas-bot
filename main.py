@@ -1,15 +1,28 @@
 import os
-from telegram.ext import Application
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
+# 🔑 حطي التوكن هنا أو من Railway Variables
 TOKEN = os.getenv("BOT_TOKEN")
 
-print("🚀 Bot is starting...")
+# /start أمر البداية
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 أهلاً بك! البوت يعمل بنجاح 🚀")
 
-if not TOKEN:
-    print("❌ BOT_TOKEN missing")
-    exit()
+# تشغيل البوت
+def main():
+    print("🚀 Bot is starting...")
 
-app = Application.builder().token(TOKEN).build()
+    if not TOKEN:
+        print("❌ BOT_TOKEN غير موجود")
+        return
 
-print("✅ Bot is running")
-app.run_polling()
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+
+    print("✅ Bot is running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
