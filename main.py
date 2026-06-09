@@ -1,14 +1,12 @@
 import os
-from telegram.ext import Application, CommandHandler
-from handlers.start import start
-from handlers.create_bot import create_bot
+from telegram.ext import Application
 
 TOKEN = os.getenv("BOT_TOKEN")
 
+if not TOKEN:
+    raise Exception("BOT_TOKEN missing")
+
+print("🚀 Bot is running...")
+
 app = Application.builder().token(TOKEN).build()
-
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("createbot", create_bot))
-
-print("🚀 SaaS Bot Running")
 app.run_polling()
