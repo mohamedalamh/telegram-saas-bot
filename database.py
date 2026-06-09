@@ -1,46 +1,82 @@
 import sqlite3
 
-conn = sqlite3.connect("data.db", check_same_thread=False)
-cursor = conn.cursor()
+DB_NAME = "data.db"
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
-    token TEXT,
-    country TEXT,
-    status TEXT DEFAULT 'inactive',
-    plan TEXT DEFAULT 'free'
-)
-""")
 
-conn.commit()
+def connect():
+    return sqlite3.connect(DB_NAME)
 
-# ➕ إضافة مستخدم
-def add_user(user_id):
-    cursor.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
+
+def create_tables():
+    conn = connect()
+    cur = conn.cursor()
+
+    # المستخدمين + الاشتراك
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT,
+        subscription_end TEXT DEFAULT NULL
+    )
+    """)
+
+    # البوتات التابعة للمستخدمين
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS user_bots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        bot_token TEXT,
+        status TEXT DEFAULT 'stopped'
+    )
+    """)
+
+    # إعدادات كل مستخدم
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        channel_id TEXT,
+        api_name TEXT,
+        api_key TEXT
+    )
+    """)
+
     conn.commit()
+    conn.close()
 
-# 👤 جلب مستخدم
-def get_user(user_id):
-    cursor.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
-    return cursor.fetchone()
 
-# 🔑 تحديث التوكن
-def update_token(user_id, token):
-    cursor.execute("UPDATE users SET token=? WHERE user_id=?", (token, user_id))
+def add_user(user_id, username):
+    conn = connect()
+    cur = conn.cursor()
+
+    cur.execute("""
+    INSERT OR IGNORE INTO users (user_id, username)
+    VALUES (?, ?)
+    """, (user_id, username))
+
     conn.commit()
+    conn.close()
 
-# ▶️ تشغيل/إيقاف
-def update_status(user_id, status):
-    cursor.execute("UPDATE users SET status=? WHERE user_id=?", (status, user_id))
+
+def save_bot(user_id, token):
+    conn = connect()
+    cur = conn.cursor()
+
+    cur.execute("""
+    INSERT INTO user_bots (user_id, bot_token, status)
+    VALUES (?, ?, 'stopped')
+    """, (user_id, token))
+
     conn.commit()
+    conn.close()
 
-# 💳 تغيير الخطة
-def update_plan(user_id, plan):
-    cursor.execute("UPDATE users SET plan=? WHERE user_id=?", (plan, user_id))
-    conn.commit()
 
-# 👥 كل المستخدمين
-def get_all_users():
-    cursor.execute("SELECT * FROM users")
-    return cursor.fetchall()
+def get_user_bots(user_id):
+    conn = connect()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM user_bots WHERE user_id=?", (user_id,))
+    data = cur.fetchall()
+
+    conn.close()
+    return data
