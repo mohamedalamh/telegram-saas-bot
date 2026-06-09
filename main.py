@@ -1,22 +1,23 @@
 import os
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 import bot
 
 TOKEN = os.getenv("BOT_TOKEN")
 
+if not TOKEN:
+    raise Exception("BOT_TOKEN is missing!")
+
 def main():
     app = Application.builder().token(TOKEN).build()
 
-    # أوامر المستخدم
+    # أوامر
     app.add_handler(CommandHandler("start", bot.start))
-    app.add_handler(CommandHandler("addtoken", bot.add_token))
-    app.add_handler(CommandHandler("startbot", bot.start_bot))
-    app.add_handler(CommandHandler("stopbot", bot.stop_bot))
+    app.add_handler(CommandHandler("addtoken", bot.addtoken))
 
-    # أدمن
-    app.add_handler(CommandHandler("users", bot.users_list))
+    # أزرار
+    app.add_handler(CallbackQueryHandler(bot.button))
 
-    print("🚀 SaaS Bot Running...")
+    print("🚀 Bot is running...")
     app.run_polling()
 
 if __name__ == "__main__":
