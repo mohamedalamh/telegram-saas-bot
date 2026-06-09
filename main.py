@@ -5,56 +5,36 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
-    filters,
+    filters
 )
 
 import bot
 
-# إعداد اللوق حتى تعرف الخطأ لو حصل
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-
 TOKEN = os.getenv("BOT_TOKEN")
+
+logging.basicConfig(level=logging.INFO)
 
 
 def main():
 
-    # 🔴 حماية: إذا التوكن غير موجود
     if not TOKEN:
-        print("❌ BOT_TOKEN غير موجود في Environment Variables")
+        print("❌ BOT_TOKEN missing")
         return
 
-    # 🚀 بناء التطبيق
     app = Application.builder().token(TOKEN).build()
 
-    # =========================
-    # 🎯 الأوامر الأساسية
-    # =========================
+    # Commands
     app.add_handler(CommandHandler("start", bot.start))
 
-    # =========================
-    # 🎯 الأزرار (Inline Buttons)
-    # =========================
+    # Buttons
     app.add_handler(CallbackQueryHandler(bot.button))
 
-    # =========================
-    # 🎯 استقبال الرسائل النصية
-    # =========================
+    # Messages
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.text_handler))
 
-    # =========================
-    # 🚀 تشغيل البوت
-    # =========================
-    print("🚀 Bot is running safely...")
+    print("🚀 SaaS Bot Running...")
 
-    try:
-        app.run_polling(
-            drop_pending_updates=True  # يمنع التعليق من رسائل قديمة
-        )
-    except Exception as e:
-        print("❌ Bot crashed:", e)
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
