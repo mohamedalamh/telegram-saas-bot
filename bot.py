@@ -1,65 +1,89 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import database as db
+import durian_api as api
 
 
-# /start
+# START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-
     db.add_user(user.id, user.username)
 
     keyboard = [
-        [InlineKeyboardButton("➕ إضافة توكن", callback_data="add_token")],
-        [InlineKeyboardButton("▶ تشغيل", callback_data="start_bot")],
-        [InlineKeyboardButton("⛔ إيقاف", callback_data="stop_bot")],
-        [InlineKeyboardButton("⚙ الإعدادات", callback_data="settings")],
-        [InlineKeyboardButton("💳 الاشتراك", callback_data="subscription")]
+        [InlineKeyboardButton("➕ توكن", callback_data="token")],
+        [InlineKeyboardButton("🌍 API إعداد", callback_data="api")],
+        [InlineKeyboardButton("📡 قناة", callback_data="channel")],
+        [InlineKeyboardButton("🌎 دولة", callback_data="country")],
+        [InlineKeyboardButton("▶ تشغيل", callback_data="start")],
+        [InlineKeyboardButton("⛔ إيقاف", callback_data="stop")],
     ]
 
     await update.message.reply_text(
-        "أهلاً بك في النظام",
+        "🔥 نظام SaaS جاهز",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
-# الأزرار
+# CALLBACK
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query
+    await q.answer()
 
-    user_id = query.from_user.id
+    uid = q.from_user.id
 
-    if query.data == "add_token":
+    if q.data == "token":
         context.user_data["step"] = "token"
-        await query.message.reply_text("أرسل توكن البوت الآن")
+        await q.message.reply_text("أرسل التوكن")
 
-    elif query.data == "start_bot":
-        db.set_status(user_id, "active")
-        await query.message.reply_text("تم تشغيل البوت ✅")
+    elif q.data == "api":
+        context.user_data["step"] = "api_name"
+        await q.message.reply_text("أرسل اسم API")
 
-    elif query.data == "stop_bot":
-        db.set_status(user_id, "inactive")
-        await query.message.reply_text("تم إيقاف البوت ⛔")
+    elif q.data == "channel":
+        context.user_data["step"] = "channel"
+        await q.message.reply_text("أرسل ID القناة")
 
-    elif query.data == "settings":
-        token = db.get_token(user_id)
-        await query.message.reply_text(f"الإعدادات:\nToken: {token}")
+    elif q.data == "country":
+        context.user_data["step"] = "country"
+        await q.message.reply_text("أرسل رمز الدولة (مثال: us)")
 
-    elif query.data == "subscription":
-        await query.message.reply_text("نظام الاشتراك غير مفعّل بعد")
+    elif q.data == "start":
+        db.set_status(uid, "active")
+        await q.message.reply_text("🚀 تم التشغيل")
+
+    elif q.data == "stop":
+        db.set_status(uid, "inactive")
+        await q.message.reply_text("⛔ تم الإيقاف")
 
 
-# استقبال النصوص (توكن)
+# TEXT HANDLER
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+    uid = update.effective_user.id
     text = update.message.text
+    step = context.user_data.get("step")
 
-    if context.user_data.get("step") == "token":
-        db.save_token(user.id, text)
-
+    if step == "token":
+        db.update_token(uid, text)
+        await update.message.reply_text("✔ تم حفظ التوكن")
         context.user_data["step"] = None
 
-        await update.message.reply_text("تم حفظ التوكن بنجاح ✅")
-    else:
-        await update.message.reply_text("استخدم الأزرار 👇")
+    elif step == "api_name":
+        context.user_data["api_name"] = text
+        context.user_data["step"] = "api_key"
+        await update.message.reply_text("أرسل API KEY")
+
+    elif step == "api_key":
+        name = context.user_data.get("api_name")
+        db.update_api(uid, name, text)
+        context.user_data["step"] = None
+        await update.message.reply_text("✔ تم حفظ API")
+
+    elif step == "channel":
+        db.update_channel(uid, text)
+        context.user_data["step"] = None
+        await update.message.reply_text("✔ تم حفظ القناة")
+
+    elif step == "country":
+        db.update_country(uid, text)
+        context.user_data["step"] = None
+        await update.message.reply_text("✔ تم حفظ الدولة")
