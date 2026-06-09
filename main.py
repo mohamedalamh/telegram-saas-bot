@@ -9,14 +9,14 @@ if not TOKEN:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        ["🔑 إضافة توكن"],
-        ["▶ تشغيل"],
-        ["⏹ إيقاف"],
-        ["📊 الحالة"]
+        ["🔑 توكن البوت"],
+        ["🌐 بيانات Durian"],
+        ["▶ تشغيل البوت", "⏹ إيقاف البوت"],
+        ["📊 الحالة", "💎 الاشتراك"]
     ]
 
     await update.message.reply_text(
-        "👋 أهلاً بك في النظام الجديد",
+        "👋 أهلاً بك في النظام",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
 
@@ -24,7 +24,7 @@ def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
 
-    print("Bot Running...")
+    print("Bot Started...")
     app.run_polling()
 
 if __name__ == "__main__":
