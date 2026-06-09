@@ -1,5 +1,5 @@
 import os
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler
 import bot
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -7,14 +7,16 @@ TOKEN = os.getenv("BOT_TOKEN")
 def main():
     app = Application.builder().token(TOKEN).build()
 
-    # أوامر
+    # أوامر المستخدم
     app.add_handler(CommandHandler("start", bot.start))
-    app.add_handler(CommandHandler("addtoken", bot.addtoken))
+    app.add_handler(CommandHandler("addtoken", bot.add_token))
+    app.add_handler(CommandHandler("startbot", bot.start_bot))
+    app.add_handler(CommandHandler("stopbot", bot.stop_bot))
 
-    # أزرار
-    app.add_handler(CallbackQueryHandler(bot.button))
+    # أدمن
+    app.add_handler(CommandHandler("users", bot.users_list))
 
-    print("🚀 Bot is running...")
+    print("🚀 SaaS Bot Running...")
     app.run_polling()
 
 if __name__ == "__main__":
