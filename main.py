@@ -3,10 +3,13 @@ from telegram.ext import Application
 
 TOKEN = os.getenv("BOT_TOKEN")
 
-if not TOKEN:
-    raise Exception("BOT_TOKEN missing")
+print("🚀 Bot is starting...")
 
-print("🚀 Bot is running...")
+if not TOKEN:
+    print("❌ BOT_TOKEN missing")
+    exit()
 
 app = Application.builder().token(TOKEN).build()
+
+print("✅ Bot is running")
 app.run_polling()
