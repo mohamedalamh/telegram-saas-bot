@@ -1,74 +1,41 @@
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-import database as db
 
-ADMIN_ID = 123456789  # 🔴 ضع رقمك هنا
-
-# 👋 البداية
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    db.add_user(user_id)
-
-    if user_id == ADMIN_ID:
-        keyboard = [
-            ["👥 المستخدمين"],
-            ["💳 تفعيل اشتراك", "⛔ إيقاف اشتراك"]
-        ]
-        text = "👑 لوحة الأدمن"
-    else:
-        keyboard = [
-            ["🔑 إضافة توكن"],
-            ["▶️ تشغيل البوت", "⛔ إيقاف البوت"],
-            ["💳 الاشتراك"]
-        ]
-        text = "👋 أهلاً بك في لوحة التحكم"
+    keyboard = [
+        [InlineKeyboardButton("➕ إضافة توكن", callback_data="add_token")],
+        [InlineKeyboardButton("▶️ تشغيل البوت", callback_data="start_bot")],
+        [InlineKeyboardButton("⛔ إيقاف البوت", callback_data="stop_bot")],
+        [InlineKeyboardButton("💳 الاشتراك", callback_data="subscription")]
+    ]
 
     await update.message.reply_text(
-        text,
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        "👋 أهلاً بك في لوحة التحكم الرئيسية",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# 🔑 إضافة توكن
+
+# أمر إضافة التوكن
 async def add_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    token = " ".join(context.args)
+    await update.message.reply_text("📌 أرسل التوكن الآن:")
 
-    if not token:
-        await update.message.reply_text("استخدم: /addtoken TOKEN")
-        return
 
-    db.update_token(user_id, token)
-    await update.message.reply_text("✅ تم حفظ التوكن")
+# التعامل مع الأزرار
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-# ▶️ تشغيل
-async def start_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user = db.get_user(user_id)
+    data = query.data
 
-    if not user or not user[1]:
-        await update.message.reply_text("❌ أضف التوكن أولاً")
-        return
-
-    db.update_status(user_id, "active")
-    await update.message.reply_text("🚀 تم تشغيل البوت")
-
-# ⛔ إيقاف
-async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    db.update_status(user_id, "inactive")
-    await update.message.reply_text("⛔ تم إيقاف البوت")
-
-# 👥 عرض المستخدمين (للأدمن فقط)
-async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    if user_id != ADMIN_ID:
-        return
-
-    users = db.get_all_users()
-
-    text = "👥 المستخدمين:\n\n"
-    for u in users:
-        text += f"ID: {u[0]} | Plan: {u[4]} | Status: {u[3]}\n"
-
-    await update.message.reply_text(text)
+    if data == "add_token":
+        await query.message.reply_text("📌 أرسل توكن البوت الآن")
+    
+    elif data == "start_bot":
+        await query.message.reply_text("🚀 تم تشغيل البوت بنجاح")
+    
+    elif data == "stop_bot":
+        await query.message.reply_text("⛔ تم إيقاف البوت")
+    
+    elif data == "subscription":
+        await query.message.reply_text("💳 اشتراكك: مجاني حالياً")
