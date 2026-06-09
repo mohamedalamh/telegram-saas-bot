@@ -3,11 +3,15 @@ import sqlite3
 DB = "bot.db"
 
 
+def connect():
+    return sqlite3.connect(DB)
+
+
+# ---------------- INIT DB ----------------
 def init_db():
-    conn = sqlite3.connect(DB)
+    conn = connect()
     cur = conn.cursor()
 
-    # المستخدمين
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
@@ -17,8 +21,7 @@ def init_db():
         api_key TEXT,
         channel_id TEXT,
         country TEXT,
-        status TEXT DEFAULT 'inactive',
-        subscription_end INTEGER DEFAULT 0
+        status TEXT DEFAULT 'inactive'
     )
     """)
 
@@ -26,8 +29,9 @@ def init_db():
     conn.close()
 
 
+# ---------------- USER ----------------
 def add_user(user_id, username):
-    conn = sqlite3.connect(DB)
+    conn = connect()
     cur = conn.cursor()
 
     cur.execute("""
@@ -39,62 +43,8 @@ def add_user(user_id, username):
     conn.close()
 
 
-def update_token(user_id, token):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-
-    cur.execute("UPDATE users SET token=? WHERE user_id=?", (token, user_id))
-    conn.commit()
-    conn.close()
-
-
-def update_api(user_id, name, key):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-
-    cur.execute("""
-    UPDATE users SET api_name=?, api_key=? WHERE user_id=?
-    """, (name, key, user_id))
-
-    conn.commit()
-    conn.close()
-
-
-def update_channel(user_id, channel_id):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-
-    cur.execute("""
-    UPDATE users SET channel_id=? WHERE user_id=?
-    """, (channel_id, user_id))
-
-    conn.commit()
-    conn.close()
-
-
-def update_country(user_id, country):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-
-    cur.execute("""
-    UPDATE users SET country=? WHERE user_id=?
-    """, (country, user_id))
-
-    conn.commit()
-    conn.close()
-
-
-def set_status(user_id, status):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-
-    cur.execute("UPDATE users SET status=? WHERE user_id=?", (status, user_id))
-    conn.commit()
-    conn.close()
-
-
 def get_user(user_id):
-    conn = sqlite3.connect(DB)
+    conn = connect()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
@@ -102,3 +52,40 @@ def get_user(user_id):
 
     conn.close()
     return row
+
+
+# ---------------- TOKEN ----------------
+def save_token(user_id, token):
+    conn = connect()
+    cur = conn.cursor()
+
+    cur.execute("""
+    UPDATE users SET token=? WHERE user_id=?
+    """, (token, user_id))
+
+    conn.commit()
+    conn.close()
+
+
+def get_token(user_id):
+    conn = connect()
+    cur = conn.cursor()
+
+    cur.execute("SELECT token FROM users WHERE user_id=?", (user_id,))
+    row = cur.fetchone()
+
+    conn.close()
+    return row[0] if row else None
+
+
+# ---------------- STATUS ----------------
+def set_status(user_id, status):
+    conn = connect()
+    cur = conn.cursor()
+
+    cur.execute("""
+    UPDATE users SET status=? WHERE user_id=?
+    """, (status, user_id))
+
+    conn.commit()
+    conn.close()
