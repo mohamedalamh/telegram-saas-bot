@@ -1,2 +1,0 @@
-import os
-ADMIN_ID = 834033986
