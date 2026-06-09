@@ -11,11 +11,6 @@ logging.basicConfig(level=logging.INFO)
 
 
 def main():
-    if not TOKEN:
-        print("❌ BOT_TOKEN missing")
-        return
-
-    # إنشاء قاعدة البيانات أولاً (مهم جداً)
     database.init_db()
 
     app = Application.builder().token(TOKEN).build()
@@ -24,7 +19,7 @@ def main():
     app.add_handler(CallbackQueryHandler(bot.button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.text_handler))
 
-    print("🚀 Bot is running...")
+    print("🚀 SaaS RUNNING")
 
     app.run_polling(drop_pending_updates=True)
 
