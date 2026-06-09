@@ -38,3 +38,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(
             "معلومات الاشتراك"
         )
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text
+
+    await update.message.reply_text(
+        f"استلمت:\n{text}"
+    )
