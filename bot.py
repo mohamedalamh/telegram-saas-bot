@@ -5,6 +5,7 @@ from keyboards import main_menu
 
 import database as db
 import child_manager
+import database as db
 
 WAITING_TOKEN = {}
 
