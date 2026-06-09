@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import db
 
-ADMIN_ID = 123456789  # 🔴 ضع ايديك هنا
+ADMIN_ID = 123456789  # ضع ايديك هنا
 
 # ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -11,72 +11,103 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.add_user(user_id)
 
     if user_id == ADMIN_ID:
+
         keyboard = [
-            [InlineKeyboardButton("👥 المستخدمين", callback_data="users")],
-            [InlineKeyboardButton("➕ إضافة مستخدم", callback_data="add_user")]
+            [InlineKeyboardButton("👥 المستخدمين", callback_data="admin_users")],
+            [InlineKeyboardButton("➕ إضافة مستخدم", callback_data="admin_add")],
+            [InlineKeyboardButton("❌ حذف مستخدم", callback_data="admin_del")],
+            [InlineKeyboardButton("📊 إحصائيات", callback_data="admin_stats")]
         ]
-        text = "👑 لوحة الأدمن"
+
+        text = "👑 لوحة تحكم الأدمن"
+
     else:
+
         keyboard = [
             [InlineKeyboardButton("➕ إضافة توكن", callback_data="add_token")],
             [InlineKeyboardButton("▶️ تشغيل", callback_data="start")],
-            [InlineKeyboardButton("⛔ إيقاف", callback_data="stop")]
+            [InlineKeyboardButton("⛔ إيقاف", callback_data="stop")],
+            [InlineKeyboardButton("📊 حالتي", callback_data="status")]
         ]
+
         text = "👤 لوحة المستخدم"
 
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 
-# ================= BUTTONS =================
+# ================= CALLBACKS =================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query
+    await q.answer()
 
-    user_id = query.from_user.id
-    data = query.data
+    uid = q.from_user.id
+    data = q.data
 
-    # ===== ADMIN =====
-    if user_id == ADMIN_ID:
+    # ================= ADMIN =================
+    if uid == ADMIN_ID:
 
-        if data == "users":
-            users = db.get_all_users()
-            await query.message.reply_text(f"👥 عدد المستخدمين: {len(users)}")
+        if data == "admin_users":
+            users = db.get_users()
+            await q.message.reply_text(f"👥 عدد المستخدمين: {len(users)}")
 
-        elif data == "add_user":
+        elif data == "admin_add":
             context.user_data["add_user"] = True
-            await query.message.reply_text("📌 أرسل ايدي المستخدم")
+            await q.message.reply_text("📌 أرسل ID المستخدم")
 
-    # ===== USER =====
+        elif data == "admin_del":
+            context.user_data["del_user"] = True
+            await q.message.reply_text("📌 أرسل ID للحذف")
+
+        elif data == "admin_stats":
+            users = db.get_users()
+            active = len([u for u in users if u[2] == 1])
+            await q.message.reply_text(f"📊 الكل: {len(users)}\n🟢 نشط: {active}")
+
+    # ================= USER =================
     else:
 
         if data == "add_token":
-            context.user_data["add_token"] = True
-            await query.message.reply_text("📌 أرسل التوكن")
+            context.user_data["token"] = True
+            await q.message.reply_text("📌 أرسل التوكن")
 
         elif data == "start":
-            db.set_active(user_id, 1)
-            await query.message.reply_text("🚀 تم التشغيل")
+            db.set_active(uid, 1)
+            await q.message.reply_text("🚀 تم التشغيل")
 
         elif data == "stop":
-            db.set_active(user_id, 0)
-            await query.message.reply_text("⛔ تم الإيقاف")
+            db.set_active(uid, 0)
+            await q.message.reply_text("⛔ تم الإيقاف")
+
+        elif data == "status":
+            user = db.get_user(uid)
+            state = "🟢 شغال" if user[2] == 1 else "🔴 متوقف"
+            await q.message.reply_text(f"📊 حالتك: {state}")
 
 
 # ================= TEXT =================
-async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    user_id = update.effective_user.id
-    text = update.message.text
+    uid = update.effective_user.id
+    msg = update.message.text
 
-    # ADD USER (ADMIN)
+    # ADD USER
     if context.user_data.get("add_user"):
-        db.add_user(int(text))
+        db.add_user(int(msg))
         context.user_data["add_user"] = False
-        await update.message.reply_text("✅ تم إضافة المستخدم")
+        await update.message.reply_text("✅ تمت إضافة المستخدم")
 
-    # ADD TOKEN (USER)
-    elif context.user_data.get("add_token"):
-        db.set_token(user_id, text)
-        context.user_data["add_token"] = False
+    # DELETE USER
+    elif context.user_data.get("del_user"):
+        db.delete_user(int(msg))
+        context.user_data["del_user"] = False
+        await update.message.reply_text("🗑 تم حذف المستخدم")
+
+    # ADD TOKEN
+    elif context.user_data.get("token"):
+        db.set_token(uid, msg)
+        context.user_data["token"] = False
         await update.message.reply_text("✅ تم حفظ التوكن")
