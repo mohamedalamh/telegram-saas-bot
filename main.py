@@ -5,7 +5,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 TOKEN = os.getenv("BOT_TOKEN")
 
 if not TOKEN:
-    raise Exception("BOT_TOKEN missing")
+    raise Exception("BOT_TOKEN missing in Railway Variables")
 
 user_tokens = {}
 
@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "👋 أهلاً بك",
+        "👋 أهلاً بك في النظام",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
 
@@ -26,7 +26,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
 
     if text == "➕ إضافة توكن":
-        await update.message.reply_text("أرسل التوكن:")
+        await update.message.reply_text("أرسل التوكن الآن")
         context.user_data["wait"] = True
 
     elif context.user_data.get("wait"):
@@ -35,7 +35,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("تم حفظ التوكن")
 
     elif text == "📊 عرض التوكن":
-        await update.message.reply_text(user_tokens.get(user_id, "لا يوجد"))
+        await update.message.reply_text(user_tokens.get(user_id, "لا يوجد توكن"))
 
     elif text == "⛔ حذف التوكن":
         user_tokens.pop(user_id, None)
