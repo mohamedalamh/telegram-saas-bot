@@ -1,104 +1,52 @@
 import os
-import asyncio
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
-# تخزين البوتات في الذاكرة
-USER_BOTS = {}
+ADMIN_TOKEN = os.getenv("BOT_TOKEN")
 
-MASTER_TOKEN = os.getenv("BOT_TOKEN")
+if not ADMIN_TOKEN:
+    raise Exception("BOT_TOKEN missing in Railway Variables")
 
-if not MASTER_TOKEN:
-    raise Exception("BOT_TOKEN missing")
+# تخزين مؤقت (لاحقًا نطورها لقاعدة بيانات)
+user_tokens = {}
 
-# تشغيل بوت مستخدم
-def start_user_bot(user_id: str, token: str):
-    async def run_bot():
-        app = Application.builder().token(token).build()
-
-        async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-            await update.message.reply_text("👋 بوتك يعمل الآن بنجاح")
-
-        app.add_handler(CommandHandler("start", start))
-        await app.run_polling()
-
-    loop = asyncio.get_event_loop()
-    task = loop.create_task(run_bot())
-    USER_BOTS[user_id] = task
-
-
-# لوحة البوت الرئيسي
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["➕ إضافة توكن"],
-        ["▶ تشغيل بوتي"],
-        ["⏹ إيقاف بوتي"],
-        ["📊 حالتي"]
+        ["📊 عرض التوكن"],
+        ["⛔ حذف التوكن"],
     ]
 
     await update.message.reply_text(
-        "👋 أهلاً بك في لوحة التحكم",
+        "👋 أهلاً بك في النظام",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
 
-
-# استقبال الرسائل
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    user_id = str(update.message.chat_id)
+    user_id = update.message.from_user.id
 
-    # إضافة التوكن
     if text == "➕ إضافة توكن":
-        await update.message.reply_text("أرسل توكن البوت الآن:")
-        context.user_data["await_token"] = True
-        return
+        await update.message.reply_text("أرسل توكن البوت الخاص بك الآن:")
+        context.user_data["awaiting_token"] = True
 
-    # استقبال التوكن
-    if context.user_data.get("await_token"):
-        context.user_data["token"] = text
-        context.user_data["await_token"] = False
-        await update.message.reply_text("✅ تم حفظ التوكن")
-        return
+    elif context.user_data.get("awaiting_token"):
+        user_tokens[user_id] = text
+        context.user_data["awaiting_token"] = False
+        await update.message.reply_text("✅ تم حفظ التوكن بنجاح")
 
-    # تشغيل بوت المستخدم
-    if text == "▶ تشغيل بوتي":
-        token = context.user_data.get("token")
+    elif text == "📊 عرض التوكن":
+        token = user_tokens.get(user_id)
+        await update.message.reply_text(f"توكنك: {token}" if token else "لا يوجد توكن")
 
-        if not token:
-            await update.message.reply_text("❌ لم تضف توكن بعد")
-            return
+    elif text == "⛔ حذف التوكن":
+        user_tokens.pop(user_id, None)
+        await update.message.reply_text("تم حذف التوكن")
 
-        if user_id in USER_BOTS:
-            await update.message.reply_text("⚠️ البوت يعمل بالفعل")
-            return
+app = Application.builder().token(ADMIN_TOKEN).build()
 
-        start_user_bot(user_id, token)
-        await update.message.reply_text("🚀 تم تشغيل بوتك")
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # إيقاف بوت المستخدم
-    if text == "⏹ إيقاف بوتي":
-        task = USER_BOTS.get(user_id)
-        if task:
-            task.cancel()
-            del USER_BOTS[user_id]
-            await update.message.reply_text("🛑 تم الإيقاف")
-        else:
-            await update.message.reply_text("❌ لا يوجد بوت يعمل")
-
-
-def main():
-    app = Application.builder().token(MASTER_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("message", handle_message))
-
-    app.add_handler(
-        CommandHandler("text", handle_message)
-    )
-
-    print("Master Bot Running...")
-    app.run_polling()
-
-
-if __name__ == "__main__":
-    main()
+print("Bot is running...")
+app.run_polling()
