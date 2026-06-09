@@ -11,11 +11,19 @@ from telegram.ext import (
 import bot
 import database as db
 
-
 TOKEN = os.getenv("BOT_TOKEN")
+
+print("================================")
+print("TOKEN =", repr(TOKEN))
+print("================================")
 
 
 def main():
+
+    if not TOKEN:
+        raise Exception(
+            "BOT_TOKEN variable not found in Railway Variables"
+        )
 
     db.init_db()
 
