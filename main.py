@@ -1,17 +1,13 @@
 import os
 import sqlite3
-import subprocess
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
-ADMIN_ID = 123456789  # غيّره
+TOKEN = os.environ.get("BOT_TOKEN")
 
-MASTER_TOKEN = os.environ.get("BOT_TOKEN")
-
-if not MASTER_TOKEN:
+if not TOKEN:
     raise Exception("BOT_TOKEN missing")
 
-# ================= DATABASE =================
 conn = sqlite3.connect("saas.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -20,29 +16,28 @@ CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
     bot_token TEXT,
     api TEXT,
+    country TEXT,
     status TEXT DEFAULT 'off',
-    process_id INTEGER
+    subscription TEXT DEFAULT 'free'
 )
 """)
 conn.commit()
 
-# ================= WORKER MANAGER =================
-def start_bot_process(token, user_id):
-    """
-    تشغيل بوت المستخدم كـ Process مستقل
-    """
-    process = subprocess.Popen([
-        "python", "worker.py",
-        token,
-        str(user_id)
-    ])
-    return process.pid
+ADMIN_ID = 123456789
 
-def stop_bot_process(pid):
-    try:
-        os.kill(pid, 9)
-    except:
-        pass
+# ================= ENGINE =================
+def run_user_logic(user_id, text):
+    """
+    هنا مستقبل النظام:
+    - API calls
+    - AI requests
+    - automation
+    """
+    cursor.execute("SELECT api FROM users WHERE user_id=?", (user_id,))
+    api = cursor.fetchone()
+
+    return f"📡 تم استقبال طلبك | API: {api[0] if api else 'none'}"
+
 
 # ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -52,20 +47,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
 
     keyboard = [
-        ["➕ إضافة توكن"],
-        ["🌐 إضافة API"],
-        ["▶ تشغيل البوت"],
-        ["⏹ إيقاف البوت"],
-        ["📊 الحالة"]
+        ["➕ توكن"],
+        ["🌐 API"],
+        ["🌍 دولة"],
+        ["▶ تشغيل"],
+        ["⏹ إيقاف"],
+        ["💎 اشتراك"]
     ]
 
     if user_id == ADMIN_ID:
         keyboard.append(["⚙ لوحة الإدارة"])
 
     await update.message.reply_text(
-        "👑 SaaS Control Panel",
+        "👑 SaaS Platform Ready",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
+
 
 # ================= HANDLER =================
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -74,19 +71,23 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     step = context.user_data.get("step")
 
-    # ADD TOKEN
-    if text == "➕ إضافة توكن":
+    # ===== INPUTS =====
+    if text == "➕ توكن":
         context.user_data["step"] = "token"
         await update.message.reply_text("📩 أرسل التوكن")
         return
 
-    # ADD API
-    if text == "🌐 إضافة API":
+    if text == "🌐 API":
         context.user_data["step"] = "api"
         await update.message.reply_text("📩 أرسل API")
         return
 
-    # SAVE TOKEN
+    if text == "🌍 دولة":
+        context.user_data["step"] = "country"
+        await update.message.reply_text("📩 أرسل الدولة")
+        return
+
+    # ===== SAVE =====
     if step == "token":
         cursor.execute("UPDATE users SET bot_token=? WHERE user_id=?", (text, user_id))
         conn.commit()
@@ -94,7 +95,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ تم حفظ التوكن")
         return
 
-    # SAVE API
     if step == "api":
         cursor.execute("UPDATE users SET api=? WHERE user_id=?", (text, user_id))
         conn.commit()
@@ -102,62 +102,39 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ تم حفظ API")
         return
 
-    # START BOT
-    if text == "▶ تشغيل البوت":
-
-        cursor.execute("SELECT bot_token FROM users WHERE user_id=?", (user_id,))
-        row = cursor.fetchone()
-
-        if not row or not row[0]:
-            await update.message.reply_text("❌ أضف التوكن أولاً")
-            return
-
-        token = row[0]
-
-        process = subprocess.Popen([
-            "python", "worker.py", token, str(user_id)
-        ])
-
-        cursor.execute(
-            "UPDATE users SET status='on', process_id=? WHERE user_id=?",
-            (process.pid, user_id)
-        )
+    if step == "country":
+        cursor.execute("UPDATE users SET country=? WHERE user_id=?", (text, user_id))
         conn.commit()
+        context.user_data["step"] = None
+        await update.message.reply_text("✅ تم حفظ الدولة")
+        return
 
-        await update.message.reply_text("🟢 تم تشغيل البوت فعلياً")
-
-    # STOP BOT
-    if text == "⏹ إيقاف البوت":
-
-        cursor.execute("SELECT process_id FROM users WHERE user_id=?", (user_id,))
-        row = cursor.fetchone()
-
-        if row and row[0]:
-            stop_bot_process(row[0])
-
-        cursor.execute("UPDATE users SET status='off', process_id=NULL WHERE user_id=?", (user_id,))
+    # ===== RUN SYSTEM =====
+    if text == "▶ تشغيل":
+        cursor.execute("UPDATE users SET status='on' WHERE user_id=?", (user_id,))
         conn.commit()
+        await update.message.reply_text("🟢 النظام يعمل")
 
+    if text == "⏹ إيقاف":
+        cursor.execute("UPDATE users SET status='off' WHERE user_id=?", (user_id,))
+        conn.commit()
         await update.message.reply_text("🔴 تم الإيقاف")
 
-    # STATUS
-    if text == "📊 الحالة":
-        cursor.execute("SELECT status, bot_token, api FROM users WHERE user_id=?", (user_id,))
-        row = cursor.fetchone()
+    if text == "💎 اشتراك":
+        cursor.execute("SELECT subscription FROM users WHERE user_id=?", (user_id,))
+        sub = cursor.fetchone()[0]
 
-        await update.message.reply_text(f"""
-📊 الحالة:
+        await update.message.reply_text(f"💎 اشتراكك: {sub}")
 
-⚙ Status: {row[0]}
-🔑 Token: {'موجود' if row[1] else 'غير موجود'}
-🌐 API: {'موجود' if row[2] else 'غير موجود'}
-""")
+    # ===== ENGINE RESPONSE =====
+    response = run_user_logic(user_id, text)
+    await update.message.reply_text(response)
+
 
 # ================= RUN =================
-app = Application.builder().token(MASTER_TOKEN).build()
-
+app = Application.builder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("🚀 MASTER BOT RUNNING")
+print("🚀 SaaS PRO Running")
 app.run_polling()
