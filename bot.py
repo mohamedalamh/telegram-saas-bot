@@ -5,7 +5,7 @@ from keyboards import main_menu
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
-        "Ø£Ù‡Ù„Ø§Ù‹ Ø¨Ùƒ ÙÙŠ Ø§Ù„Ù†Ø¸Ø§Ù…",
+        "أهلاً بك في النظام",
         reply_markup=main_menu()
     )
 
@@ -16,32 +16,32 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "add_token":
         await query.message.reply_text(
-            "Ø£Ø±Ø³Ù„ ØªÙˆÙƒÙ† Ø§Ù„Ø¨ÙˆØª"
+            "أرسل توكن البوت"
         )
 
     elif query.data == "start_bot":
         await query.message.reply_text(
-            "Ø³ÙŠØªÙ… ØªØ´ØºÙŠÙ„ Ø§Ù„Ø¨ÙˆØª"
+            "سيتم تشغيل البوت"
         )
 
     elif query.data == "stop_bot":
         await query.message.reply_text(
-            "Ø³ÙŠØªÙ… Ø¥ÙŠÙ‚Ø§Ù Ø§Ù„Ø¨ÙˆØª"
+            "سيتم إيقاف البوت"
         )
 
     elif query.data == "settings":
         await query.message.reply_text(
-            "Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª"
+            "الإعدادات"
         )
 
     elif query.data == "subscription":
         await query.message.reply_text(
-            "Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ø§Ø´ØªØ±Ø§Ùƒ"
+            "معلومات الاشتراك"
         )
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text
 
     await update.message.reply_text(
-        f"Ø§Ø³ØªÙ„Ù…Øª:\n{text}"
+        f"استلمت:\n{text}"
     )
