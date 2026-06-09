@@ -31,54 +31,63 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
 
-    # التأكد من وجود المستخدم
     cursor.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
     conn.commit()
 
-    # حفظ التوكن
-    if text.startswith("🔑"):
-        context.user_data["step"] = "token"
-        await update.message.reply_text("أرسل توكن البوت الآن")
+    # نجيب آخر حالة للمستخدم من قاعدة البيانات
+    cursor.execute("SELECT bot_token, durian_api FROM users WHERE user_id=?", (user_id,))
+    data = cursor.fetchone()
+
+    waiting = context.user_data.get("waiting")
+
+    # طلب توكن
+    if text == "🔑 توكن البوت":
+        context.user_data["waiting"] = "token"
+        await update.message.reply_text("📩 أرسل توكن البوت الآن")
         return
 
-    # حفظ Durian API
-    if text.startswith("🌐"):
-        context.user_data["step"] = "api"
-        await update.message.reply_text("أرسل API الخاص بـ Durian")
+    # طلب API
+    elif text == "🌐 بيانات Durian":
+        context.user_data["waiting"] = "api"
+        await update.message.reply_text("📩 أرسل API الخاص بـ Durian")
         return
 
-    # استقبال البيانات
-    step = context.user_data.get("step")
-
-    if step == "token":
+    # استقبال التوكن
+    elif waiting == "token":
         cursor.execute("UPDATE users SET bot_token=? WHERE user_id=?", (text, user_id))
         conn.commit()
-        context.user_data["step"] = None
+        context.user_data["waiting"] = None
         await update.message.reply_text("✅ تم حفظ التوكن")
+        return
 
-    elif step == "api":
+    # استقبال API
+    elif waiting == "api":
         cursor.execute("UPDATE users SET durian_api=? WHERE user_id=?", (text, user_id))
         conn.commit()
-        context.user_data["step"] = None
+        context.user_data["waiting"] = None
         await update.message.reply_text("✅ تم حفظ API")
+        return
 
+    # تشغيل
     elif text == "▶ تشغيل البوت":
         cursor.execute("UPDATE users SET status='on' WHERE user_id=?", (user_id,))
         conn.commit()
         await update.message.reply_text("🟢 تم التشغيل")
 
+    # إيقاف
     elif text == "⏹ إيقاف البوت":
         cursor.execute("UPDATE users SET status='off' WHERE user_id=?", (user_id,))
         conn.commit()
         await update.message.reply_text("🔴 تم الإيقاف")
 
+    # الحالة
     elif text == "📊 الحالة":
         cursor.execute("SELECT bot_token, durian_api, status FROM users WHERE user_id=?", (user_id,))
-        data = cursor.fetchone()
+        row = cursor.fetchone()
 
         await update.message.reply_text(
             f"""📊 الحالة:
-توكن: {'موجود' if data and data[0] else 'غير موجود'}
-Durian: {'موجود' if data and data[1] else 'غير موجود'}
-الحالة: {data[2] if data else 'off'}"""
+توكن: {'موجود' if row and row[0] else 'غير موجود'}
+Durian: {'موجود' if row and row[1] else 'غير موجود'}
+الحالة: {row[2] if row else 'off'}"""
         )
