@@ -2,7 +2,10 @@ import os
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.environ.get("BOT_TOKEN")
+
+if not TOKEN:
+    raise Exception("BOT_TOKEN is missing in Railway Variables")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -13,7 +16,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "👋 أهلاً بك في البوت الرئيسي",
+        "👋 أهلاً بك في النظام الرئيسي",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
 
