@@ -1,59 +1,26 @@
-import os
+import asyncio
+from telegram.ext import Application
 
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    filters
-)
-
-import bot
 import database as db
+import child_manager
 
-TOKEN = os.getenv("BOT_TOKEN")
-
-print("================================")
-print("TOKEN =", repr(TOKEN))
-print("================================")
+from bot import start, button, text_handler
 
 
 def main():
 
-    if not TOKEN:
-        raise Exception(
-            "BOT_TOKEN variable not found in Railway Variables"
-        )
-
     db.init_db()
 
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token("YOUR_MAIN_TOKEN").build()
 
-    app.add_handler(
-        CommandHandler(
-            "start",
-            bot.start
-        )
-    )
+    loop = asyncio.get_event_loop()
 
-    app.add_handler(
-        CallbackQueryHandler(
-            bot.button
-        )
-    )
+    # 🔥 Auto Restore SaaS
+    child_manager.restore_bots(loop)
 
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            bot.text_handler
-        )
-    )
+    print("🚀 SAAS SYSTEM RUNNING")
 
-    print("🚀 SaaS RUNNING")
-
-    app.run_polling(
-        drop_pending_updates=True
-    )
+    app.run_polling()
 
 
 if __name__ == "__main__":
