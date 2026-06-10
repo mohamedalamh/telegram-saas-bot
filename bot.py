@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 from keyboards import main_menu
 import database as db
 import child_manager
+import asyncio
 
 WAITING_TOKEN = {}
 
@@ -21,13 +22,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = query.from_user.id
 
+    # نحصل على event loop الحالي (مهم جدًا)
+    loop = asyncio.get_running_loop()
+
     if query.data == "add_token":
 
         WAITING_TOKEN[user_id] = True
 
-        await query.message.reply_text(
-            "🔑 أرسل توكن البوت"
-        )
+        await query.message.reply_text("🔑 أرسل توكن البوت")
 
 
     elif query.data == "start_bot":
@@ -40,12 +42,13 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         token = user[1]
 
-        result = child_manager.start_bot(user_id, token)
+        result = child_manager.start_bot(user_id, token, loop)
 
         if result:
             db.set_status(user_id, "running")
-
             await query.message.reply_text("✅ تم تشغيل البوت")
+        else:
+            await query.message.reply_text("⚠️ البوت يعمل بالفعل")
 
 
     elif query.data == "stop_bot":
@@ -54,8 +57,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if result:
             db.set_status(user_id, "stopped")
-
             await query.message.reply_text("❌ تم إيقاف البوت")
+        else:
+            await query.message.reply_text("⚠️ البوت غير شغال")
 
 
     elif query.data == "status":
@@ -86,7 +90,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         token = update.message.text.strip()
 
-        # ✔ الصحيح هنا
         db.set_token(user_id, token)
 
         del WAITING_TOKEN[user_id]
