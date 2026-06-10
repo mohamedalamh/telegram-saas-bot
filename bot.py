@@ -6,7 +6,11 @@ import database as db
 import child_manager
 import asyncio
 
-WAITING_TOKEN = {}
+# 🧠 نخزن انتظار التوكن (مؤقت فقط)
+WAITING_TOKEN = set()
+
+# 🧠 نحفظ loop مرة واحدة فقط (أفضل أداء)
+LOOP = None
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -17,17 +21,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global LOOP
+
     query = update.callback_query
     await query.answer()
 
     user_id = query.from_user.id
 
-    # نحصل على event loop الحالي (مهم جدًا)
-    loop = asyncio.get_running_loop()
+    # نحفظ loop أول مرة فقط
+    if LOOP is None:
+        LOOP = asyncio.get_running_loop()
 
     if query.data == "add_token":
 
-        WAITING_TOKEN[user_id] = True
+        WAITING_TOKEN.add(user_id)
 
         await query.message.reply_text("🔑 أرسل توكن البوت")
 
@@ -42,7 +49,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         token = user[1]
 
-        result = child_manager.start_bot(user_id, token, loop)
+        result = child_manager.start_bot(user_id, token, LOOP)
 
         if result:
             db.set_status(user_id, "running")
@@ -70,7 +77,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("❌ لا يوجد بوت")
             return
 
-        status = user[2]
+        status = user[2] or "stopped"
 
         text = "🟢 يعمل" if status == "running" else "🔴 متوقف"
 
@@ -92,6 +99,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         db.set_token(user_id, token)
 
-        del WAITING_TOKEN[user_id]
+        WAITING_TOKEN.remove(user_id)
 
         await update.message.reply_text("✅ تم حفظ التوكن بنجاح")
