@@ -1,15 +1,12 @@
 from telegram import Update
 from telegram.ext import ContextTypes
+import asyncio
 
 from keyboards import main_menu
 import database as db
 import child_manager
-import asyncio
 
-# 🧠 نخزن انتظار التوكن (مؤقت فقط)
 WAITING_TOKEN = set()
-
-# 🧠 نحفظ loop مرة واحدة فقط (أفضل أداء)
 LOOP = None
 
 
@@ -21,6 +18,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     global LOOP
 
     query = update.callback_query
@@ -28,17 +26,15 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = query.from_user.id
 
-    # نحفظ loop أول مرة فقط
     if LOOP is None:
         LOOP = asyncio.get_running_loop()
 
+    # ➕ إضافة توكن
     if query.data == "add_token":
-
         WAITING_TOKEN.add(user_id)
+        await query.message.reply_text("🔑 أرسل التوكن")
 
-        await query.message.reply_text("🔑 أرسل توكن البوت")
-
-
+    # ▶ تشغيل بوت
     elif query.data == "start_bot":
 
         user = db.get_user(user_id)
@@ -49,26 +45,26 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         token = user[1]
 
-        result = child_manager.start_bot(user_id, token, LOOP)
+        ok = child_manager.start_bot(user_id, token, LOOP)
 
-        if result:
+        if ok:
             db.set_status(user_id, "running")
-            await query.message.reply_text("✅ تم تشغيل البوت")
+            await query.message.reply_text("✅ تم التشغيل")
         else:
             await query.message.reply_text("⚠️ البوت يعمل بالفعل")
 
-
+    # ⛔ إيقاف بوت
     elif query.data == "stop_bot":
 
-        result = child_manager.stop_bot(user_id)
+        ok = child_manager.stop_bot(user_id)
 
-        if result:
+        if ok:
             db.set_status(user_id, "stopped")
-            await query.message.reply_text("❌ تم إيقاف البوت")
+            await query.message.reply_text("❌ تم الإيقاف")
         else:
-            await query.message.reply_text("⚠️ البوت غير شغال")
+            await query.message.reply_text("⚠️ غير شغال")
 
-
+    # 📊 حالة
     elif query.data == "status":
 
         user = db.get_user(user_id)
@@ -77,15 +73,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("❌ لا يوجد بوت")
             return
 
-        status = user[2] or "stopped"
+        status = user[2]
 
         text = "🟢 يعمل" if status == "running" else "🔴 متوقف"
 
-        await query.message.reply_text(f"حالة البوت: {text}")
+        await query.message.reply_text(f"الحالة: {text}")
 
-
+    # 📞 دعم
     elif query.data == "support":
-
         await query.message.reply_text("📞 تواصل مع الدعم")
 
 
@@ -101,4 +96,4 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         WAITING_TOKEN.remove(user_id)
 
-        await update.message.reply_text("✅ تم حفظ التوكن بنجاح")
+        await update.message.reply_text("✅ تم حفظ التوكن")
