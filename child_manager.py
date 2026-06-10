@@ -1,64 +1,68 @@
 import asyncio
 from telegram.ext import Application, CommandHandler
 
-from database import set_status
+from database import set_status, get_running_users
 
-# نخزن التطبيقات بدل threads
-running_apps = {}
-
-
-async def child_start(update, context):
-    await update.message.reply_text("🤖 تم تشغيل البوت بنجاح")
+# نخزن tasks فقط
+running_tasks = {}
 
 
-async def run_app(user_id, token):
+async def start_cmd(update, context):
+    await update.message.reply_text("🤖 بوتك يعمل بنجاح")
+
+
+async def run_bot(user_id, token):
 
     app = Application.builder().token(token).build()
 
     await app.initialize()
     await app.bot.delete_webhook(drop_pending_updates=True)
 
-    app.add_handler(CommandHandler("start", child_start))
+    app.add_handler(CommandHandler("start", start_cmd))
 
     set_status(user_id, "running")
 
-    print(f"[STARTED] user_id={user_id}")
+    print(f"✅ BOT STARTED: {user_id}")
 
     try:
         await app.run_polling(close_loop=False)
     except asyncio.CancelledError:
-        print(f"[STOPPED] user_id={user_id}")
+        pass
     finally:
         await app.shutdown()
 
 
+# ▶ تشغيل بوت
 def start_bot(user_id, token, loop):
 
-    if user_id in running_apps:
+    if user_id in running_tasks:
         return False
 
-    task = loop.create_task(run_app(user_id, token))
+    task = loop.create_task(run_bot(user_id, token))
 
-    running_apps[user_id] = {
-        "task": task
-    }
+    running_tasks[user_id] = task
 
     return True
 
 
+# ⛔ إيقاف بوت (حقيقي)
 def stop_bot(user_id):
 
-    bot = running_apps.get(user_id)
+    task = running_tasks.get(user_id)
 
-    if not bot:
-        return False
-
-    task = bot["task"]
-
-    task.cancel()
-
-    running_apps.pop(user_id, None)
+    if task:
+        task.cancel()
+        running_tasks.pop(user_id, None)
 
     set_status(user_id, "stopped")
 
     return True
+
+
+# 🔁 استرجاع تلقائي بعد إعادة تشغيل السيرفر
+def restore_bots(loop):
+
+    users = get_running_users()
+
+    for user_id, token in users:
+        start_bot(user_id, token, loop)
