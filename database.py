@@ -51,3 +51,14 @@ def set_status(user_id, status):
 
     conn.commit()
     conn.close()
+
+
+def get_running_users():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("SELECT user_id, token FROM users WHERE status='running'")
+    rows = c.fetchall()
+
+    conn.close()
+    return rows
