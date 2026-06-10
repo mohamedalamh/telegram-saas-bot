@@ -13,7 +13,7 @@ def main():
 
     app = Application.builder().token(TOKEN).build()
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     # 🔥 Auto Restore SaaS
     child_manager.restore_bots(loop)
