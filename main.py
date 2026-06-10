@@ -1,3 +1,4 @@
+import os
 import asyncio
 from telegram.ext import Application
 
@@ -11,11 +12,19 @@ def main():
 
     db.init_db()
 
+    # ✅ أخذ التوكن من Railway Variables
+    TOKEN = os.getenv("MAIN_BOT_TOKEN")
+
+    if not TOKEN:
+        raise Exception("MAIN_BOT_TOKEN is not set in environment variables")
+
     app = Application.builder().token(TOKEN).build()
 
-    loop = asyncio.get_running_loop()
+    # ⚡ مهم جدًا في Python 3.13
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
-    # 🔥 Auto Restore SaaS
+    # 🔁 تشغيل البوتات المحفوظة
     child_manager.restore_bots(loop)
 
     print("🚀 SAAS SYSTEM RUNNING")
