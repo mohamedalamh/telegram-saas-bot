@@ -1,54 +1,49 @@
-import threading
-from telegram import Update
+import asyncio
 from telegram.ext import Application, CommandHandler
 
-from database import get_user, set_status
+from database import set_status
 
 running_bots = {}
 
 
-async def child_start(update: Update, context):
+async def child_start(update, context):
     await update.message.reply_text("🤖 تم تشغيل البوت بنجاح")
 
 
-def run_bot_instance(user_id, token):
+async def run_bot_instance(user_id, token):
 
     app = Application.builder().token(token).build()
 
-    # 🔥 حل مشكلة Conflict
-    app.bot.delete_webhook(drop_pending_updates=True)
+    await app.initialize()
+    await app.bot.delete_webhook(drop_pending_updates=True)
 
     app.add_handler(CommandHandler("start", child_start))
 
-    print(f"[STARTED BOT] user_id={user_id}")
+    set_status(user_id, "running")
 
-    app.run_polling()
+    print(f"[BOT STARTED] user_id={user_id}")
+
+    await app.run_polling(close_loop=False)
 
 
-# ✅ تشغيل البوت
-def start_bot(user_id, token):
+def start_bot(user_id, token, loop):
 
     if user_id in running_bots:
         return False
 
-    thread = threading.Thread(
-        target=run_bot_instance,
-        args=(user_id, token),
-        daemon=True
-    )
+    task = loop.create_task(run_bot_instance(user_id, token))
 
-    running_bots[user_id] = thread
-    thread.start()
-
-    set_status(user_id, "running")
+    running_bots[user_id] = task
 
     return True
 
 
-# ❌ إيقاف البوت (مبدئي)
 def stop_bot(user_id):
 
-    if user_id in running_bots:
+    task = running_bots.get(user_id)
+
+    if task:
+        task.cancel()
         del running_bots[user_id]
 
     set_status(user_id, "stopped")
