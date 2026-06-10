@@ -11,7 +11,7 @@ def main():
 
     db.init_db()
 
-    app = Application.builder().token("YOUR_MAIN_TOKEN").build()
+    app = Application.builder().token(TOKEN).build()
 
     loop = asyncio.get_event_loop()
 
