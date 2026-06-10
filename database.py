@@ -5,13 +5,13 @@ DB_NAME = "users.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
+    c = conn.cursor()
 
-    cur.execute("""
+    c.execute("""
     CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
         token TEXT,
-        status INTEGER DEFAULT 0
+        status TEXT DEFAULT 'stopped'
     )
     """)
 
@@ -19,67 +19,35 @@ def init_db():
     conn.close()
 
 
-def save_token(user_id, token):
+def set_token(user_id, token):
     conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
+    c = conn.cursor()
 
-    cur.execute("""
-    INSERT OR REPLACE INTO users
-    (user_id, token, status)
-    VALUES (
-        ?,
-        ?,
-        COALESCE(
-            (SELECT status FROM users WHERE user_id=?),
-            0
-        )
-    )
+    c.execute("""
+    INSERT OR REPLACE INTO users (user_id, token, status)
+    VALUES (?, ?, COALESCE((SELECT status FROM users WHERE user_id=?), 'stopped'))
     """, (user_id, token, user_id))
 
     conn.commit()
     conn.close()
 
 
-def get_token(user_id):
+def get_user(user_id):
     conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
+    c = conn.cursor()
 
-    cur.execute(
-        "SELECT token FROM users WHERE user_id=?",
-        (user_id,)
-    )
-
-    row = cur.fetchone()
+    c.execute("SELECT user_id, token, status FROM users WHERE user_id=?", (user_id,))
+    row = c.fetchone()
 
     conn.close()
-
-    return row[0] if row else None
+    return row
 
 
 def set_status(user_id, status):
     conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
+    c = conn.cursor()
 
-    cur.execute(
-        "UPDATE users SET status=? WHERE user_id=?",
-        (status, user_id)
-    )
+    c.execute("UPDATE users SET status=? WHERE user_id=?", (status, user_id))
 
     conn.commit()
     conn.close()
-
-
-def get_status(user_id):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-
-    cur.execute(
-        "SELECT status FROM users WHERE user_id=?",
-        (user_id,)
-    )
-
-    row = cur.fetchone()
-
-    conn.close()
-
-    return row[0] if row else 0
