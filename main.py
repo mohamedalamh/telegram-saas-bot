@@ -1,6 +1,6 @@
 import os
 import asyncio
-from telegram.ext import Application
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
 import database as db
 import child_manager
@@ -12,23 +12,28 @@ def main():
 
     db.init_db()
 
-    # ✅ أخذ التوكن من Railway Variables
     TOKEN = os.getenv("MAIN_BOT_TOKEN")
 
     if not TOKEN:
         raise Exception("MAIN_BOT_TOKEN is not set in environment variables")
 
+    # 🤖 إنشاء التطبيق
     app = Application.builder().token(TOKEN).build()
 
-    # ⚡ مهم جدًا في Python 3.13
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    # 🔁 تشغيل البوتات المحفوظة
-    child_manager.restore_bots(loop)
+    # 🔥 ربط الهاندلرز (مهم جدًا)
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
     print("🚀 SAAS SYSTEM RUNNING")
 
+    # 🔁 تشغيل البوتات الفرعية بعد تشغيل النظام
+    async def post_init(app):
+        child_manager.restore_bots(app.create_task)
+
+    app.post_init = post_init
+
+    # ▶ تشغيل البوت
     app.run_polling()
 
 
