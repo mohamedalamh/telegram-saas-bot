@@ -3,7 +3,6 @@ from telegram.ext import Application, CommandHandler
 
 from database import set_status, get_running_users
 
-# نخزن tasks فقط
 running_tasks = {}
 
 
@@ -11,6 +10,7 @@ async def start_cmd(update, context):
     await update.message.reply_text("🤖 بوتك يعمل بنجاح")
 
 
+# ✅ تشغيل بوت فرعي بطريقة صحيحة SaaS
 async def run_bot(user_id, token):
 
     app = Application.builder().token(token).build()
@@ -24,11 +24,19 @@ async def run_bot(user_id, token):
 
     print(f"✅ BOT STARTED: {user_id}")
 
+    # ❌ مهم: لا تستخدم run_polling هنا
+    # بدل ذلك نستخدم start + idle loop
+    await app.start()
+    await app.updater.start_polling()
+
     try:
-        await app.run_polling(close_loop=False)
+        while True:
+            await asyncio.sleep(3600)
     except asyncio.CancelledError:
         pass
     finally:
+        await app.updater.stop()
+        await app.stop()
         await app.shutdown()
 
 
@@ -45,7 +53,7 @@ def start_bot(user_id, token, loop):
     return True
 
 
-# ⛔ إيقاف بوت (حقيقي)
+# ⛔ إيقاف بوت
 def stop_bot(user_id):
 
     task = running_tasks.get(user_id)
@@ -59,7 +67,7 @@ def stop_bot(user_id):
     return True
 
 
-# 🔁 استرجاع تلقائي بعد إعادة تشغيل السيرفر
+# 🔁 استرجاع بعد restart
 def restore_bots(loop):
 
     users = get_running_users()
