@@ -109,3 +109,43 @@ def get_stats():
     cursor.close()
     conn.close()
     return total, active
+
+# أضف هذا الكود في نهاية ملف database.py تماماً واضغط حفظ
+def init_api_table():
+    """إنشاء جدول لتخزين حسابات موقع DurianRCS للمستخدمين"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_site_accounts (
+            user_id BIGINT PRIMARY KEY,
+            username TEXT NOT NULL,
+            api_key TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def save_site_account(user_id, username, api_key):
+    """حفظ أو تحديث بيانات حساب الموقع للمستخدم"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO user_site_accounts (user_id, username, api_key)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (user_id)
+        DO UPDATE SET username = EXCLUDED.username, api_key = EXCLUDED.api_key;
+    ''', (user_id, username, api_key))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def get_site_account(user_id):
+    """جلب بيانات حساب الموقع للمستخدم"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT username, api_key FROM user_site_accounts WHERE user_id = %s', (user_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row # سيعيد (username, api_key) أو None
