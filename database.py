@@ -6,12 +6,17 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_connection():
     url = DATABASE_URL.strip()
+    
+    # فصل البارامترات الإضافية بشكل نصي سليم لمنع تحويلها لمصفوفة
     if "?" in url:
-        url = url.split("?")
+        url = url.split("?")[0]
+        
+    # تفكيك الرابط المستخرج من Neon ليتناسب مع بارامترات pg8000
     url = url.replace("postgres://", "").replace("postgresql://", "")
     user_pass, host_db = url.split("@")
     user, password = user_pass.split(":")
     host_port, dbname = host_db.split("/")
+    
     if ":" in host_port:
         host, port = host_port.split(":")
         port = int(port)
@@ -62,7 +67,6 @@ def init_db():
 def save_bot(user_id, token):
     conn = get_connection()
     cursor = conn.cursor()
-    # الاستعلام المحدث ليتماشى مع الأعمدة الجديدة بالتأكيد
     cursor.execute('''
         INSERT INTO user_bots (user_id, token, is_active, expires_at, is_banned) 
         VALUES (%s, %s, 0, CURRENT_TIMESTAMP + INTERVAL '30 days', 0)
@@ -134,12 +138,12 @@ def get_stats():
     cursor = conn.cursor()
     try:
         cursor.execute('SELECT COUNT(*) FROM user_bots')
-        total = cursor.fetchone()[0]
+        total = cursor.fetchone()
         cursor.execute('SELECT COUNT(*) FROM user_bots WHERE is_active = 1')
-        active = cursor.fetchone()[0]
+        active = cursor.fetchone()
         cursor.close()
         conn.close()
-        return total, active
+        return total[0], active[0]
     except Exception:
         cursor.close()
         conn.close()
