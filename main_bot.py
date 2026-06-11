@@ -1,7 +1,7 @@
 import os
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import database as db
@@ -21,11 +21,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
     
-    # فحص الحظر بشكل آمن من الحقل الرابع [token, is_active, expires_at, is_banned]
     db_data = db.get_bot(user_id)
     if db_data and len(db_data) >= 4:
-        is_banned = db_data[3]
-        if is_banned == 1:
+        if db_data[3] == 1:
             await update.message.reply_text("❌ عذراً، تم إيقاف حسابك وحظرك من استخدام المنصة من قبل الإدارة.")
             return
 
@@ -36,7 +34,6 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     text = update.message.text.strip()
     
-    # أوامر الإدارة الخاصة بالأدمن
     if ADMIN_ID != 0 and user_id == ADMIN_ID and context.user_data.get("admin_action"):
         action = context.user_data.get("admin_action")
         try:
@@ -53,8 +50,8 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("admin_action", None)
         return
 
-    # استقبال توكن المستخدم العادي
-    status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل...")
+    # استقبال التوكن الجديد وحفظه بشكل قسري مباشر
+    status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل وحفظه...")
     is_valid = await bot_manager.validate_token(text)
     if not is_valid:
         await status_msg.edit_text("❌ التوكن غير صالح! تأكد من الحصول عليه بشكل صحيح من @BotFather.")
@@ -63,7 +60,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         db.save_bot(user_id, text)
         await status_msg.delete()
-        await update.message.reply_text("✅ تم ربط وحفظ توكن البوت الخاص بك بنجاح!")
+        await update.message.reply_text("✅ تم شحن وتحديث توكن البوت الجديد بنجاح!")
     except Exception as e:
         await status_msg.edit_text(f"❌ خطأ في قاعدة البيانات: {e}")
         return
@@ -76,14 +73,13 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
     
     try:
         db_data = db.get_bot(user_id)
-        if db_data and len(db_data) >= 3:
+        if db_data and len(db_data) >= 4:
             status = bot_manager.get_status(user_id)
-            # استخراج تاريخ الانتهاء بأمان التام من الحقل الثالث
             expires_at = db_data[2]
             if expires_at:
                 if isinstance(expires_at, str):
                     expires_at = datetime.fromisoformat(expires_at.replace("Z", ""))
-                delta = expires_at.replace(tzinfo=None) - datetime.utcnow()
+                delta = expires_at.replace(tzinfo=None) - datetime.now(timezone.utc).replace(tzinfo=None)
                 days_left = f"{max(0, delta.days)} يوم"
     except Exception:
         days_left = "36 يوم, 3 ساعة"
@@ -126,7 +122,12 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_admin_panel(update)
 
 async def show_admin_panel(update: Update):
-    text = "👑 **مرحباً بك في لوحة تحكم المطور الفنية** 👑\n\nاختر الإجراء المطلوب:"
+    try:
+        total, active = db.get_stats()
+    except Exception:
+        total, active = 0, 0
+
+    text = f"👑 **لوحة تحكم المطور الفنية** 👑\n\n👥 إجمالي البوتات: {total}\n🚀 النشطة: {active}"
     keyboard = [
         [InlineKeyboardButton("➕ إضافة أيام لمستخدم", callback_data="adm_add_days")],
         [InlineKeyboardButton("🚫 حظر / إلغاء حظر مستخدم", callback_data="adm_ban")],
@@ -150,7 +151,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         elif query.data == "adm_add_days":
             context.user_data["admin_action"] = "add_days"
-            await query.message.reply_text("📥 أرسل: (معرف المستخدم) (عدد الأيام)\nمثال: `12345678 30`")
+            await query.message.reply_text("📥 أرسل: (معرف المستخدم) (عدد الأيام)")
             return
         elif query.data == "adm_ban":
             context.user_data["admin_action"] = "ban"
@@ -161,7 +162,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_dashboard(update, user_id, user_name)
         return
 
-    # تفكيك واستخراج التوكن الفعلي بشكل سليم [0] من مصفوفة قاعدة البيانات
     db_data = db.get_bot(user_id)
     token = db_data[0] if (db_data and len(db_data) > 0) else None
 
@@ -169,7 +169,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not token:
             await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن.")
         else:
-            await query.message.reply_text(f"🔑 توكنك الحالي هو:\n`{token}`")
+            await query.message.reply_text(f"🔑 توكنك المسجل الحالي هو:\n`{token}`")
             
     elif query.data == "run_bot":
         if not token:
@@ -177,9 +177,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             success = await bot_manager.start_bot(user_id, token)
             if success:
-                await query.message.reply_text("✅ تم تشغيل البوت بنجاح!")
+                await query.message.reply_text("✅ تم تشغيل البوت الفرعي بنجاح ممتد!")
             else:
-                await query.message.reply_text("ℹ️ البوت يعمل بالفعل في الخلفية.")
+                await query.message.reply_text("ℹ️ البوت الفرعي يعمل بالفعل في الخلفية.")
             await show_dashboard(update, user_id, user_name)
             
     elif query.data == "stop_bot":
