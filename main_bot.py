@@ -20,14 +20,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
     
-    # التحقق من الحظر بشكل آمن للغاية
-    try:
-        db_data = db.get_bot(user_id)
-        if db_data and len(db_data) >= 4 and db_data[3] == 1:
+    # فحص الحظر بشكل آمن
+    db_data = db.get_bot(user_id)
+    if db_data and len(db_data) >= 4:
+        is_banned = db_data[3]
+        if is_banned == 1:
             await update.message.reply_text("❌ عذراً، تم إيقاف حسابك وحظرك من استخدام المنصة من قبل الإدارة.")
             return
-    except Exception:
-        pass
 
     await show_dashboard(update, user_id, user_name)
 
@@ -76,17 +75,16 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_dashboard(update: Update, user_id: int, user_name: str):
     db_data = db.get_bot(user_id)
     
-    days_left = "36 يوم, 3 ساعة"  # القيمة الافتراضية المطابقة للصورة تماماً
+    days_left = "36 يوم, 3 ساعة"
     status = "⚪️ غير مربوط"
     
     if db_data:
         status = bot_manager.get_status(user_id)
-        # حساب الأيام بشكل آمن لتفادي التعليق البرمجي
+        # تفكيك عناصر الصف المرتجع من PostgreSQL بشكل آمن [token, is_active, expires_at, is_banned]
         try:
             expires_at = db_data[2]
             if expires_at:
                 if isinstance(expires_at, str):
-                    # إذا رجع من القاعدة كنص نقوم بتحليله
                     expires_at = datetime.fromisoformat(expires_at.replace("Z", ""))
                 delta = expires_at.replace(tzinfo=None) - datetime.utcnow()
                 days_left = f"{max(0, delta.days)} يوم"
@@ -179,17 +177,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_dashboard(update, user_id, user_name)
         return
 
+    # استخراج التوكن بشكل آمن للمستخدمين
+    token = db_data[0] if db_data else None
+
     if query.data == "show_token_info":
-        if not db_data:
+        if not token:
             await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن. فضلاً أرسل توكن بوتك:")
         else:
-            await query.message.reply_text(f"🔑 توكنك المسجل الحالي هو:\n`{db_data[0]}`", parse_mode="Markdown")
+            await query.message.reply_text(f"🔑 توكنك المسجل الحالي هو:\n`{token}`", parse_mode="Markdown")
             
     elif query.data == "run_bot":
-        if not db_data:
+        if not token:
             await query.message.reply_text("⚠️ يرجى إرسال توكن البوت أولاً لربطه بالمنصة:")
         else:
-            success = await bot_manager.start_bot(user_id, db_data[0])
+            success = await bot_manager.start_bot(user_id, token)
             if success:
                 await query.message.reply_text("✅ تم تشغيل البوت بنجاح!\nنوع البوت: DurianRCS (حسابين)\n\n⚠️ إذا كان بوتك DURIAN أو GRIZZLY ولم يتم تشغيل البوت انتظر 5 دقائق لا تقم بإيقافه.")
             else:
@@ -197,7 +198,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_dashboard(update, user_id, user_name)
             
     elif query.data == "stop_bot":
-        if not db_data:
+        if not token:
             await query.message.reply_text("❌ ليس لديك بوت نشط لإيقافه.")
         else:
             await bot_manager.stop_bot(user_id)
