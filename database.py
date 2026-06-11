@@ -117,10 +117,12 @@ def set_status(user_id, is_active):
     conn.close()
 
 def get_bot(user_id):
+    """جلب صف البيانات الكامل للمستخدم لضمان مطابقة وفصل الحقول بذكاء"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('SELECT expires_at FROM user_bots WHERE user_id = %s', (user_id,))
+        # جلب التوكن وحالة التشغيل والحظر وتاريخ انتهاء الاشتراك صراحةً بالترتيب الصحيح
+        cursor.execute('SELECT token, is_active, expires_at, is_banned FROM user_bots WHERE user_id = %s', (user_id,))
         row = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -149,9 +151,9 @@ def get_stats():
     cursor = conn.cursor()
     try:
         cursor.execute('SELECT COUNT(*) FROM user_bots')
-        total = cursor.fetchone()
+        total = cursor.fetchone()[0]
         cursor.execute('SELECT COUNT(*) FROM user_bots WHERE is_active = 1')
-        active = cursor.fetchone()
+        active = cursor.fetchone()[0]
         cursor.close()
         conn.close()
         return total, active
