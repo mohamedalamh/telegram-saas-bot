@@ -7,11 +7,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 def get_connection():
     url = DATABASE_URL.strip()
     
-    # فصل البارامترات الإضافية بشكل نصي سليم
+    # معالجة البارامترات الإضافية بشكل نصي سليم لمنع تحويلها لمصفوفة
     if "?" in url:
         url = url.split("?")[0]
         
-    # تفكيك الرابط ليتناسب مع بارامترات pg8000
+    # تفكيك الرابط المستخرج ليتناسب مع بارامترات pg8000
     url = url.replace("postgres://", "").replace("postgresql://", "")
     user_pass, host_db = url.split("@")
     user, password = user_pass.split(":")
@@ -37,7 +37,7 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # 1. إنشاء جدول البوتات الأساسي
+    # 1. إنشاء جدول البوتات الأساسي بالهيكل الكامل والحديث فوراً
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_bots (
             user_id BIGINT PRIMARY KEY,
@@ -49,7 +49,7 @@ def init_db():
     ''')
     conn.commit()
 
-    # محاولة إضافة الأعمدة المفقودة إذا كان الجدول قديماً
+    # محاولة إضافة الأعمدة بشكل منفصل في حال كان الجدول قديماً وموجوداً مسبقاً
     try:
         cursor.execute("ALTER TABLE user_bots ADD COLUMN expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '30 days'")
         conn.commit()
@@ -62,7 +62,7 @@ def init_db():
     except Exception:
         conn.rollback()
 
-    # 2. إنشاء جدول ربط الحسابات لموقع DurianRCS لضمان تواجده
+    # 2. إنشاء جدول ربط الحسابات لموقع DurianRCS لضمان تواجده بكفاءة
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_site_accounts (
             user_id BIGINT PRIMARY KEY,
@@ -124,7 +124,7 @@ def get_bot(user_id):
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        return row[0] if row else None
+        return row if row else None
     except Exception:
         cursor.close()
         conn.close()
@@ -149,9 +149,9 @@ def get_stats():
     cursor = conn.cursor()
     try:
         cursor.execute('SELECT COUNT(*) FROM user_bots')
-        total = cursor.fetchone()[0]
+        total = cursor.fetchone()
         cursor.execute('SELECT COUNT(*) FROM user_bots WHERE is_active = 1')
-        active = cursor.fetchone()[0]
+        active = cursor.fetchone()
         cursor.close()
         conn.close()
         return total, active
