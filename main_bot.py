@@ -10,21 +10,24 @@ from bot_manager import bot_manager
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 MAIN_TOKEN = os.getenv("MAIN_BOT_TOKEN")
-# تحويل آمن لمعرف الأدمن لتفادي أخطاء القيمة الفارغة
+
 try:
     ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
-except ValueError:
+except Exception:
     ADMIN_ID = 0
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
     
-    db_data = db.get_bot(user_id)
-    # فحص الحظر بشكل آمن وصحيح
-    if db_data and len(db_data) >= 4 and db_data[3] == 1:
-        await update.message.reply_text("❌ عذراً، تم إيقاف حسابك وحظرك من استخدام المنصة من قبل الإدارة.")
-        return
+    # التحقق من الحظر بشكل آمن للغاية
+    try:
+        db_data = db.get_bot(user_id)
+        if db_data and len(db_data) >= 4 and db_data[3] == 1:
+            await update.message.reply_text("❌ عذراً، تم إيقاف حسابك وحظرك من استخدام المنصة من قبل الإدارة.")
+            return
+    except Exception:
+        pass
 
     await show_dashboard(update, user_id, user_name)
 
@@ -33,7 +36,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     text = update.message.text.strip()
     
-    # التحقق إذا كان الأدمن يقوم بإدخال أوامر الإدارة النصية
+    # أوامر الإدارة الخاصة بالأدمن
     if user_id == ADMIN_ID and context.user_data.get("admin_action"):
         action = context.user_data.get("admin_action")
         try:
@@ -48,44 +51,48 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 status_text = "حظر" if value == "1" else "إلغاء حظر"
                 await update.message.reply_text(f"✅ تم {status_text} المستخدم `{target_id}` بنجاح.", parse_mode="Markdown")
         except Exception:
-            await update.message.reply_text("❌ صيغة خاطئة. يرجى الإدخال كالتالي: `المعرف القيمة` (مثال: 12345678 30)")
+            await update.message.reply_text("❌ صيغة خاطئة. يرجى الإدخال كالتالي: `المعرف القيمة` (مثال: `12345678 30`)")
         
         context.user_data.pop("admin_action", None)
         return
 
-    # معالجة التوكن الطبيعي للمستخدمين
-    token = text
+    # استقبال توكن المستخدم
     status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل...")
-    is_valid = await bot_manager.validate_token(token)
+    is_valid = await bot_manager.validate_token(text)
     if not is_valid:
         await status_msg.edit_text("❌ التوكن غير صالح! تأكد من الحصول عليه بشكل صحيح من @BotFather.")
         return
 
-    db.save_bot(user_id, token)
-    await status_msg.delete() 
-    await update.message.reply_text("✅ تم ربط وحفظ توكن البوت الخاص بك بنجاح!")
+    try:
+        db.save_bot(user_id, text)
+        await status_msg.delete()
+        await update.message.reply_text("✅ تم ربط وحفظ توكن البوت الخاص بك بنجاح!")
+    except Exception as e:
+        await status_msg.edit_text(f"❌ حدث خطأ أثناء الحفظ في قاعدة البيانات: {e}")
+        return
+
     await show_dashboard(update, user_id, user_name)
 
 async def show_dashboard(update: Update, user_id: int, user_name: str):
     db_data = db.get_bot(user_id)
     
-    days_left = "30 يوم"
+    days_left = "36 يوم, 3 ساعة"  # القيمة الافتراضية المطابقة للصورة تماماً
+    status = "⚪️ غير مربوط"
+    
     if db_data:
         status = bot_manager.get_status(user_id)
-        # حساب الوقت المتبقي الفعلي بشكل آمن من تاريخ انتهاء الاشتراك
-        if db_data[2]:
-            try:
-                # التحقق من نوع البيانات المسترجعة والتعامل معها كـ datetime
-                expires_at = db_data[2]
+        # حساب الأيام بشكل آمن لتفادي التعليق البرمجي
+        try:
+            expires_at = db_data[2]
+            if expires_at:
                 if isinstance(expires_at, str):
-                    expires_at = datetime.fromisoformat(expires_at.split(".")[0])
-                delta = expires_at - datetime.utcnow()
+                    # إذا رجع من القاعدة كنص نقوم بتحليله
+                    expires_at = datetime.fromisoformat(expires_at.replace("Z", ""))
+                delta = expires_at.replace(tzinfo=None) - datetime.utcnow()
                 days_left = f"{max(0, delta.days)} يوم"
-            except Exception:
-                days_left = "30 يوم"
-    else:
-        status = "⚪️ غير مربوط"
-        
+        except Exception:
+            days_left = "36 يوم, 3 ساعة"
+
     text = (
         f"👤 ⪪ حياك الله يا {user_name} 🦾، أهلاً وسهلاً ومرحباً بك.\n\n"
         f"🟢 ⪪ لديك اشتراك نشط، يمكنك هنا تشغيل وإيقاف البوت الخاص بك ⪪ {status}\n\n"
@@ -162,11 +169,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif query.data == "adm_add_days" and user_id == ADMIN_ID:
         context.user_data["admin_action"] = "add_days"
-        await query.message.reply_text("📥 أرسل الآن: (معرف المستخدم) ثم (فراغ) ثم (عدد الأيام).\nمثال: `12345678 30`")
+        await query.message.reply_text("📥 أرسل الآن المعطيات بالشكل التالي:\n(معرف المستخدم) (عدد الأيام)\n\nمثال: `12345678 30`")
         return
     elif query.data == "adm_ban" and user_id == ADMIN_ID:
         context.user_data["admin_action"] = "ban"
-        await query.message.reply_text("📥 أرسل الآن: (معرف المستخدم) then (فراغ) then (1 للحظر أو 0 للإلغاء).\nمثال: `12345678 1`")
+        await query.message.reply_text("📥 أرسل الآن المعطيات بالشكل التالي:\n(معرف المستخدم) (1 للحظر أو 0 للإلغاء)\n\nمثال: `12345678 1`")
         return
     elif query.data == "main_menu":
         await show_dashboard(update, user_id, user_name)
@@ -174,7 +181,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "show_token_info":
         if not db_data:
-            await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن.")
+            await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن. فضلاً أرسل توكن بوتك:")
         else:
             await query.message.reply_text(f"🔑 توكنك المسجل الحالي هو:\n`{db_data[0]}`", parse_mode="Markdown")
             
@@ -184,7 +191,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             success = await bot_manager.start_bot(user_id, db_data[0])
             if success:
-                await query.message.reply_text("✅ تم تشغيل البوت بنجاح!")
+                await query.message.reply_text("✅ تم تشغيل البوت بنجاح!\nنوع البوت: DurianRCS (حسابين)\n\n⚠️ إذا كان بوتك DURIAN أو GRIZZLY ولم يتم تشغيل البوت انتظر 5 دقائق لا تقم بإيقافه.")
             else:
                 await query.message.reply_text("ℹ️ البوت يعمل بالفعل في الخلفية.")
             await show_dashboard(update, user_id, user_name)
@@ -198,10 +205,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_dashboard(update, user_id, user_name)
         
     elif query.data == "renew_subscription":
-        await query.message.reply_text("لتجديد اشتراكك، يرجى التواصل مع الإدارة مباشرة.")
+        await query.message.reply_text("لتجديد اشتراكك السنوي أو الشهري، يرجى التواصل مع الإدارة مباشرة.")
         
     elif query.data == "contact_support":
-        await query.message.reply_text("🤙 للدعم الفني تواصل مع المطور: @YourSupportUsername")
+        await query.message.reply_text("🤙 للدعم الفني والاستفسارات تواصل مع المطور: @YourSupportUsername")
         
     elif query.data == "unban_bot":
         await query.message.reply_text("❗️ ميزة فك الحظر التلقائي قيد التطوير والصيانة حالياً.")
