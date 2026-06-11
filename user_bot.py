@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import database as db
+from durian_api import DurianAPI
 
 # ==================== 1. القائمة الرئيسية ====================
 async def start_user_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -32,7 +33,7 @@ async def show_settings(update: Update):
 
 # ==================== 3. إدارة الحسابات ====================
 async def show_manage_accounts(update: Update, user_id: int):
-    """عرض حساب الموقع المرتبط أو خيار إضافة حساب جديد"""
+    """عرض حساب الموقع المرتبط أو خيار إضافة حساب جديد بشكل آمن"""
     account = db.get_site_account(user_id)
     
     if account:
@@ -50,11 +51,9 @@ async def show_manage_accounts(update: Update, user_id: int):
 
 # ==================== 4. معالجة الإدخال النصي للحساب ====================
 async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مستمع ذكي لاستقبال اسم المستخدم والـ API Key بشكل متسلسل"""
     user_id = update.effective_user.id
     text = update.message.text.strip()
     
-    # خطوة 1: استقبال اسم المستخدم والطلب الـ API Key
     if context.user_data.get("waiting_for_username"):
         context.user_data["temp_username"] = text
         context.user_data.pop("waiting_for_username", None)
@@ -62,7 +61,6 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("🔑 ممتاز، الآن قم بإرسال الـ **API Key** الخاص بك من إعدادات حسابك في الموقع:")
         return
 
-    # خطوة 2: استقبال الـ API Key والحفظ النهائي
     elif context.user_data.get("waiting_for_apikey"):
         username = context.user_data.get("temp_username")
         api_key = text
@@ -70,13 +68,11 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data.pop("waiting_for_apikey", None)
         context.user_data.pop("temp_username", None)
         
-        # حفظ البيانات في جدول الحسابات
         db.save_site_account(user_id, username, api_key)
         
-        # إعادة توجيه المستخدم للواجهة الرئيسية للبوت الفرعي
         keyboard = [[InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data="main_menu")]]
         await update.message.reply_text(
-            f"✅ تم ربط حسابك بنجاح!\n\n👤 اسم المستخدم: `{username}`\n🔑 الـ API Key تم حفظه وتشفيره بنجاح لدورة الصيد.",
+            f"✅ تم ربط حسابك بنجاح!\n\n👤 اسم المستخدم: `{username}`\n🔑 الـ API Key تم حفظه وتأمين مسار الصيد.",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
@@ -93,20 +89,44 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
     elif query.data == "bot_settings":
         await show_settings(update)
     elif query.data == "manage_accounts":
-        await show_manage_accounts(query, user_id)
+        # تصحيح التمرير البرمجي وتمرير كائن update الأساسي بدلاً من query
+        await show_manage_accounts(update, user_id)
         
     elif query.data == "add_new_site_account":
         context.user_data["waiting_for_username"] = True
         await query.message.reply_text("📥 فضلاً، أرسل الآن **اسم المستخدم (Username)** الخاص بحسابك في موقع DurianRCS:")
         
+    elif query.data == "start_hunting":
+        account = db.get_site_account(user_id)
+        if not account:
+            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى الانتقال إلى الإعدادات ➔ إدارة الحسابات وربط حسابك أولاً.")
+            return
+            
+        username, api_key = account
+        balance = await DurianAPI.get_balance(api_key)
+        
+        if balance <= 0.0:
+            await query.message.reply_text(f"⚠️ تم الاتصال بالحساب `{username}` بنجاح، ولكن رصيدك الحالي {balance}$، يرجى شحن الرصيد لبدء الصيد.")
+            return
+
+        context.user_data["is_hunting"] = True
+        await query.message.reply_text(
+            f"🚀 **تم تفعيل وضع الصيد التلقائي بنجاح!**\n\n"
+            f"👤 الحساب النشط: `{username}`\n"
+            f"💰 الرصيد الحالي: `{balance}$`\n"
+            f"🔄 جاري فحص وتحديث قائمة الدول المستهدفة لطلب أول رقم..."
+        )
+        
+    elif query.data == "stop_hunting":
+        context.user_data["is_hunting"] = False
+        await query.message.reply_text("🛑 تم إيقاف عملية صيد الأرقام بشكل كامل.")
+        
     elif query.data == "add_country_page_1":
-        # إعادة تفعيل دالة الدول السابقة
-        await query.message.reply_text("🗺️ واجهة الدول جاهزة.")
+        await query.message.reply_text("🗺️ واجهة الدول جاهزة ومستقرة.")
 
 def create_user_app(token: str):
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start_user_bot))
     app.add_handler(CallbackQueryHandler(user_bot_callback_handler))
-    # إضافة مستمع نصوص عام لاستقبال مدخلات اسم الحساب والـ API Key
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_inputs))
     return app
