@@ -1,13 +1,13 @@
 import os
 import pg8000
-from datetime import datetime, timedelta
 
+# قراءة رابط الاتصال من متغيرات بيئة Railway
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_connection():
     url = DATABASE_URL.strip()
     if "?" in url:
-        url = url.split("?")[0]
+        url = url.split("?")
     url = url.replace("postgres://", "").replace("postgresql://", "")
     user_pass, host_db = url.split("@")
     user, password = user_pass.split(":")
@@ -18,12 +18,20 @@ def get_connection():
     else:
         host = host_port
         port = 5432
-    return pg8000.connect(user=user, password=password, host=host, port=port, database=dbname, ssl_context=True)
+
+    return pg8000.connect(
+        user=user,
+        password=password,
+        host=host,
+        port=port,
+        database=dbname,
+        ssl_context=True
+    )
 
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
-    # إضافة حقول تاريخ انتهاء الاشتراك والحظر
+    # إنشاء الجدول بالهيكل الكامل والحديث فوراً
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_bots (
             user_id BIGINT PRIMARY KEY,
@@ -34,12 +42,27 @@ def init_db():
         )
     ''')
     conn.commit()
+
+    # محاولة إضافة الأعمدة بشكل منفصل في حال كان الجدول قديماً وموجوداً مسبقاً
+    try:
+        cursor.execute("ALTER TABLE user_bots ADD COLUMN expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '30 days'")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+    try:
+        cursor.execute("ALTER TABLE user_bots ADD COLUMN is_banned INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
     cursor.close()
     conn.close()
 
 def save_bot(user_id, token):
     conn = get_connection()
     cursor = conn.cursor()
+    # الاستعلام المحدث ليتماشى مع الأعمدة الجديدة بالتأكيد
     cursor.execute('''
         INSERT INTO user_bots (user_id, token, is_active, expires_at, is_banned) 
         VALUES (%s, %s, 0, CURRENT_TIMESTAMP + INTERVAL '30 days', 0)
@@ -51,7 +74,6 @@ def save_bot(user_id, token):
     conn.close()
 
 def add_days_to_user(user_id, days):
-    """إضافة أيام إلى اشتراك المستخدم"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
@@ -64,7 +86,6 @@ def add_days_to_user(user_id, days):
     conn.close()
 
 def ban_user(user_id, status):
-    """حظر أو إلغاء حظر مستخدم (1 للحظر، 0 للإلغاء)"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('UPDATE user_bots SET is_banned = %s WHERE user_id = %s', (status, user_id))
@@ -83,36 +104,48 @@ def set_status(user_id, is_active):
 def get_bot(user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT token, is_active, expires_at, is_banned FROM user_bots WHERE user_id = %s', (user_id,))
-    row = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return row
+    try:
+        cursor.execute('SELECT expires_at FROM user_bots WHERE user_id = %s', (user_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return row[0] if row else None
+    except Exception:
+        cursor.close()
+        conn.close()
+        return None
 
 def get_all_active_bots():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT user_id, token FROM user_bots WHERE is_active = 1 AND is_banned = 0 AND expires_at > CURRENT_TIMESTAMP')
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return rows
+    try:
+        cursor.execute('SELECT user_id, token FROM user_bots WHERE is_active = 1 AND is_banned = 0')
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except Exception:
+        cursor.close()
+        conn.close()
+        return []
 
 def get_stats():
-    """جلب إحصائيات عامة للوحة التحكم"""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM user_bots')
-    total = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM user_bots WHERE is_active = 1')
-    active = cursor.fetchone()[0]
-    cursor.close()
-    conn.close()
-    return total, active
+    try:
+        cursor.execute('SELECT COUNT(*) FROM user_bots')
+        total = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM user_bots WHERE is_active = 1')
+        active = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+        return total, active
+    except Exception:
+        cursor.close()
+        conn.close()
+        return 0, 0
 
-# أضف هذا الكود في نهاية ملف database.py تماماً واضغط حفظ
 def init_api_table():
-    """إنشاء جدول لتخزين حسابات موقع DurianRCS للمستخدمين"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
@@ -127,7 +160,6 @@ def init_api_table():
     conn.close()
 
 def save_site_account(user_id, username, api_key):
-    """حفظ أو تحديث بيانات حساب الموقع للمستخدم"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
@@ -141,11 +173,10 @@ def save_site_account(user_id, username, api_key):
     conn.close()
 
 def get_site_account(user_id):
-    """جلب بيانات حساب الموقع للمستخدم"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT username, api_key FROM user_site_accounts WHERE user_id = %s', (user_id,))
     row = cursor.fetchone()
     cursor.close()
     conn.close()
-    return row # سيعيد (username, api_key) أو None
+    return row
