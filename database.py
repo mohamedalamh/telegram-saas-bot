@@ -5,12 +5,14 @@ import pg8000
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_connection():
-    """تحليل الرابط واستخراج بيانات الاتصال المتوافقة مع pg8000"""
-    # تنظيف الرابط للتأكد من عدم وجود مسافات
+    """تحليل الرابط واستخراج بيانات الاتصال المتوافقة مع pg8000 بشكل آمن"""
     url = DATABASE_URL.strip()
     
+    # فصل البارامترات الإضافية مثل ?sslmode=require عن مسار البيانات الرئيسي
+    if "?" in url:
+        url = url.split("?")[0]
+        
     # تفكيك الرابط المستخرج من Neon ليتناسب مع بارامترات pg8000
-    # الرابط يكون بالشكل: postgres://user:password@host:port/dbname
     url = url.replace("postgres://", "").replace("postgresql://", "")
     user_pass, host_db = url.split("@")
     user, password = user_pass.split(":")
@@ -51,7 +53,6 @@ def init_db():
 def save_bot(user_id, token):
     conn = get_connection()
     cursor = conn.cursor()
-    # تحويل الإشارات إلى تنسيق pg8000 القياسي المستقر
     cursor.execute('''
         INSERT INTO user_bots (user_id, token, is_active) 
         VALUES (%s, %s, 0)
