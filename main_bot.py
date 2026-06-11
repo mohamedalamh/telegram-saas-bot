@@ -10,14 +10,19 @@ from bot_manager import bot_manager
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 MAIN_TOKEN = os.getenv("MAIN_BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0")) # ضع معرفك الشخصي في الـ Variables باسم ADMIN_ID
+# تحويل آمن لمعرف الأدمن لتفادي أخطاء القيمة الفارغة
+try:
+    ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+except ValueError:
+    ADMIN_ID = 0
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
     
     db_data = db.get_bot(user_id)
-    if db_data and db_data[3] == 1: # الفحص إذا كان محظوراً
+    # فحص الحظر بشكل آمن وصحيح
+    if db_data and len(db_data) >= 4 and db_data[3] == 1:
         await update.message.reply_text("❌ عذراً، تم إيقاف حسابك وحظرك من استخدام المنصة من قبل الإدارة.")
         return
 
@@ -67,10 +72,17 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
     days_left = "30 يوم"
     if db_data:
         status = bot_manager.get_status(user_id)
-        # حساب الوقت المتبقي الفعلي
+        # حساب الوقت المتبقي الفعلي بشكل آمن من تاريخ انتهاء الاشتراك
         if db_data[2]:
-            delta = db_data[2] - datetime.utcnow()
-            days_left = f"{max(0, delta.days)} يوم"
+            try:
+                # التحقق من نوع البيانات المسترجعة والتعامل معها كـ datetime
+                expires_at = db_data[2]
+                if isinstance(expires_at, str):
+                    expires_at = datetime.fromisoformat(expires_at.split(".")[0])
+                delta = expires_at - datetime.utcnow()
+                days_left = f"{max(0, delta.days)} يوم"
+            except Exception:
+                days_left = "30 يوم"
     else:
         status = "⚪️ غير مربوط"
         
@@ -93,7 +105,6 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
         ]
     ]
     
-    # إذا كان المستخدم هو المطور، يظهر له زر إضافي لفتح لوحة التحكم الكاملة
     if user_id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("👑 لوحة تحكم الإدارة 👑", callback_data="admin_panel")])
 
@@ -107,20 +118,24 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
         except Exception:
             pass
 
-# ==================== لوحة تحكم الأدمن ====================
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """فتح اللوحة عبر أمر /admin للأدمن فقط"""
     if update.effective_user.id != ADMIN_ID:
         return
     await show_admin_panel(update)
 
 async def show_admin_panel(update: Update):
-    total, active = db.get_stats()
+    try:
+        total, active = db.get_stats()
+        total_val = total[0] if total else 0
+        active_val = active[0] if active else 0
+    except Exception:
+        total_val, active_val = 0, 0
+
     text = (
         f"👑 **مرحباً بك في لوحة تحكم المطور الفنية** 👑\n\n"
         f"📊 إحصائيات المنصة الحالية:\n"
-        f"👥 إجمالي البوتات المسجلة: {total}\n"
-        f"🚀 البوتات النشطة حالياً: {active}\n\n"
+        f"👥 إجمالي البوتات المسجلة: {total_val}\n"
+        f"🚀 البوتات النشطة حالياً: {active_val}\n\n"
         f"قم باختيار الإجراء المطلوب من الأزرار أدناه:"
     )
     keyboard = [
@@ -142,26 +157,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = query.from_user.first_name
     db_data = db.get_bot(user_id)
 
-    # معالجة أزرار الإدارة
     if query.data == "admin_panel" and user_id == ADMIN_ID:
         await show_admin_panel(update)
         return
     elif query.data == "adm_add_days" and user_id == ADMIN_ID:
         context.user_data["admin_action"] = "add_days"
-        await query.message.reply_text("📥 أرسل الآن: (معرف المستخدم المراد تعديله) ثم (فراغ) ثم (عدد الأيام).\nمثال: `12345678 30`")
+        await query.message.reply_text("📥 أرسل الآن: (معرف المستخدم) ثم (فراغ) ثم (عدد الأيام).\nمثال: `12345678 30`")
         return
     elif query.data == "adm_ban" and user_id == ADMIN_ID:
         context.user_data["admin_action"] = "ban"
-        await query.message.reply_text("📥 أرسل الآن: (معرف المستخدم) ثم (فراغ) ثم (1 للحظر أو 0 لإلغاء الحظر).\nمثال للحظر: `12345678 1`")
+        await query.message.reply_text("📥 أرسل الآن: (معرف المستخدم) then (فراغ) then (1 للحظر أو 0 للإلغاء).\nمثال: `12345678 1`")
         return
     elif query.data == "main_menu":
         await show_dashboard(update, user_id, user_name)
         return
 
-    # الأزرار العامة للمستخدمين
     if query.data == "show_token_info":
         if not db_data:
-            await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن. أرسل التوكن الخاص بك ليتم حفظه ربطه تلقائياً:")
+            await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن.")
         else:
             await query.message.reply_text(f"🔑 توكنك المسجل الحالي هو:\n`{db_data[0]}`", parse_mode="Markdown")
             
