@@ -32,6 +32,8 @@ def get_connection():
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
+    
+    # 1. إنشاء جدول البوتات الأساسي
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_bots (
             user_id BIGINT PRIMARY KEY,
@@ -55,6 +57,7 @@ def init_db():
     except Exception:
         conn.rollback()
 
+    # 2. إنشاء جدول ربط الحسابات لموقع DurianRCS
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_site_accounts (
             user_id BIGINT PRIMARY KEY,
@@ -63,6 +66,16 @@ def init_db():
         )
     ''')
     conn.commit()
+
+    # 3. إنشاء جدول قنوات الصيد الجديدة تلقائياً عند الإقلاع لضمان استقرار النظام
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_hunting_channels (
+            user_id BIGINT PRIMARY KEY,
+            channel_id TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+
     cursor.close()
     conn.close()
 
@@ -174,6 +187,35 @@ def get_site_account(user_id):
         cursor.close()
         conn.close()
         return row
+    except Exception:
+        cursor.close()
+        conn.close()
+        return None
+
+def save_hunting_channel(user_id, channel_id):
+    """حفظ أو تحديث معرف قناة الصيد المسجل للمستخدم"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO user_hunting_channels (user_id, channel_id)
+        VALUES (%s, %s)
+        ON CONFLICT (user_id)
+        DO UPDATE SET channel_id = EXCLUDED.channel_id;
+    ''', (user_id, str(channel_id)))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def get_hunting_channel(user_id):
+    """جلب معرف قناة الصيد الخاص بالمستخدم"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('SELECT channel_id FROM user_hunting_channels WHERE user_id = %s', (user_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return row[0] if row else None
     except Exception:
         cursor.close()
         conn.close()
