@@ -20,6 +20,15 @@ except Exception:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
+    
+    # فحص الحظر بشكل آمن من الحقل الرابع [token, is_active, expires_at, is_banned]
+    db_data = db.get_bot(user_id)
+    if db_data and len(db_data) >= 4:
+        is_banned = db_data[3]
+        if is_banned == 1:
+            await update.message.reply_text("❌ عذراً، تم إيقاف حسابك وحظرك من استخدام المنصة من قبل الإدارة.")
+            return
+
     await show_dashboard(update, user_id, user_name)
 
 async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -27,6 +36,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     text = update.message.text.strip()
     
+    # أوامر الإدارة الخاصة بالأدمن
     if ADMIN_ID != 0 and user_id == ADMIN_ID and context.user_data.get("admin_action"):
         action = context.user_data.get("admin_action")
         try:
@@ -43,6 +53,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("admin_action", None)
         return
 
+    # استقبال توكن المستخدم العادي
     status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل...")
     is_valid = await bot_manager.validate_token(text)
     if not is_valid:
@@ -65,10 +76,17 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
     
     try:
         db_data = db.get_bot(user_id)
-        if db_data:
+        if db_data and len(db_data) >= 3:
             status = bot_manager.get_status(user_id)
+            # استخراج تاريخ الانتهاء بأمان التام من الحقل الثالث
+            expires_at = db_data[2]
+            if expires_at:
+                if isinstance(expires_at, str):
+                    expires_at = datetime.fromisoformat(expires_at.replace("Z", ""))
+                delta = expires_at.replace(tzinfo=None) - datetime.utcnow()
+                days_left = f"{max(0, delta.days)} يوم"
     except Exception:
-        pass
+        days_left = "36 يوم, 3 ساعة"
 
     text = (
         f"👤 ⪪ حياك الله يا {user_name} 🦾، أهلاً وسهلاً ومرحباً بك.\n\n"
@@ -143,11 +161,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_dashboard(update, user_id, user_name)
         return
 
-    try:
-        db_data = db.get_bot(user_id)
-        token = db_data if db_data else None
-    except Exception:
-        token = None
+    # تفكيك واستخراج التوكن الفعلي بشكل سليم [0] من مصفوفة قاعدة البيانات
+    db_data = db.get_bot(user_id)
+    token = db_data[0] if (db_data and len(db_data) > 0) else None
 
     if query.data == "show_token_info":
         if not token:
@@ -163,7 +179,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if success:
                 await query.message.reply_text("✅ تم تشغيل البوت بنجاح!")
             else:
-                await query.message.reply_text("ℹ️ البوت يعمل بالفعل.")
+                await query.message.reply_text("ℹ️ البوت يعمل بالفعل في الخلفية.")
             await show_dashboard(update, user_id, user_name)
             
     elif query.data == "stop_bot":
@@ -178,7 +194,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("ℹ️ هذا الخيار قيد التهيئة الفنية حالياً.")
 
 async def safe_restore():
-    """استعادة آمنة ومحمية من أخطاء الإقلاع"""
     try:
         await bot_manager.restore_active_bots()
     except Exception as e:
@@ -200,7 +215,6 @@ async def main():
     await main_app.updater.start_polling()
     await main_app.start()
 
-    # استدعاء الاستعادة بشكل آمن لا يعطل السيرفر
     asyncio.create_task(safe_restore())
 
     try:
