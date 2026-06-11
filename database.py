@@ -1,16 +1,42 @@
 import os
-import psycopg2
+import pg8000
 
-# قراءة رابط الاتصال تلقائياً من نظام تشغيل Railway
+# قراءة رابط الاتصال من متغيرات بيئة Railway
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_connection():
-    return psycopg2.connect(DATABASE_URL, sslmode='require')
+    """تحليل الرابط واستخراج بيانات الاتصال المتوافقة مع pg8000"""
+    # تنظيف الرابط للتأكد من عدم وجود مسافات
+    url = DATABASE_URL.strip()
+    
+    # تفكيك الرابط المستخرج من Neon ليتناسب مع بارامترات pg8000
+    # الرابط يكون بالشكل: postgres://user:password@host:port/dbname
+    url = url.replace("postgres://", "").replace("postgresql://", "")
+    user_pass, host_db = url.split("@")
+    user, password = user_pass.split(":")
+    host_port, dbname = host_db.split("/")
+    
+    # حل مشكلة الـ Port إذا وجد أو وضع الافتراضي
+    if ":" in host_port:
+        host, port = host_port.split(":")
+        port = int(port)
+    else:
+        host = host_port
+        port = 5432
+
+    # الاتصال الآمن والمباشر بالقاعدة
+    return pg8000.connect(
+        user=user,
+        password=password,
+        host=host,
+        port=port,
+        database=dbname,
+        ssl_context=True # تفعيل الأمان المشفر المطلوب في منصة Neon
+    )
 
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
-    # استخدام BIGINT لأن معرفات تيليجرام أصبحت أرقاماً ضخمة
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_bots (
             user_id BIGINT PRIMARY KEY,
@@ -25,7 +51,7 @@ def init_db():
 def save_bot(user_id, token):
     conn = get_connection()
     cursor = conn.cursor()
-    # استعلام ذكي: إذا كان المستخدم مسجلاً مسبقاً يقوم بتحديث التوكن فقط
+    # تحويل الإشارات إلى تنسيق pg8000 القياسي المستقر
     cursor.execute('''
         INSERT INTO user_bots (user_id, token, is_active) 
         VALUES (%s, %s, 0)
