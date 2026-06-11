@@ -7,11 +7,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 def get_connection():
     url = DATABASE_URL.strip()
     
-    # فصل البارامترات الإضافية بشكل نصي سليم لمنع تحويلها لمصفوفة
+    # فصل البارامترات الإضافية بشكل نصي سليم
     if "?" in url:
         url = url.split("?")[0]
         
-    # تفكيك الرابط المستخرج من Neon ليتناسب مع بارامترات pg8000
+    # تفكيك الرابط ليتناسب مع بارامترات pg8000
     url = url.replace("postgres://", "").replace("postgresql://", "")
     user_pass, host_db = url.split("@")
     user, password = user_pass.split(":")
@@ -36,7 +36,8 @@ def get_connection():
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
-    # إنشاء الجدول بالهيكل الكامل والحديث فوراً
+    
+    # 1. إنشاء جدول البوتات الأساسي
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_bots (
             user_id BIGINT PRIMARY KEY,
@@ -48,7 +49,7 @@ def init_db():
     ''')
     conn.commit()
 
-    # محاولة إضافة الأعمدة بشكل منفصل في حال كان الجدول قديماً وموجوداً مسبقاً
+    # محاولة إضافة الأعمدة المفقودة إذا كان الجدول قديماً
     try:
         cursor.execute("ALTER TABLE user_bots ADD COLUMN expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '30 days'")
         conn.commit()
@@ -60,6 +61,16 @@ def init_db():
         conn.commit()
     except Exception:
         conn.rollback()
+
+    # 2. إنشاء جدول ربط الحسابات لموقع DurianRCS لضمان تواجده
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_site_accounts (
+            user_id BIGINT PRIMARY KEY,
+            username TEXT NOT NULL,
+            api_key TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
 
     cursor.close()
     conn.close()
@@ -138,30 +149,16 @@ def get_stats():
     cursor = conn.cursor()
     try:
         cursor.execute('SELECT COUNT(*) FROM user_bots')
-        total = cursor.fetchone()
+        total = cursor.fetchone()[0]
         cursor.execute('SELECT COUNT(*) FROM user_bots WHERE is_active = 1')
-        active = cursor.fetchone()
+        active = cursor.fetchone()[0]
         cursor.close()
         conn.close()
-        return total[0], active[0]
+        return total, active
     except Exception:
         cursor.close()
         conn.close()
         return 0, 0
-
-def init_api_table():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_site_accounts (
-            user_id BIGINT PRIMARY KEY,
-            username TEXT NOT NULL,
-            api_key TEXT NOT NULL
-        )
-    ''')
-    conn.commit()
-    cursor.close()
-    conn.close()
 
 def save_site_account(user_id, username, api_key):
     conn = get_connection()
@@ -179,8 +176,13 @@ def save_site_account(user_id, username, api_key):
 def get_site_account(user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT username, api_key FROM user_site_accounts WHERE user_id = %s', (user_id,))
-    row = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return row
+    try:
+        cursor.execute('SELECT username, api_key FROM user_site_accounts WHERE user_id = %s', (user_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return row
+    except Exception:
+        cursor.close()
+        conn.close()
+        return None
