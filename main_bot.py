@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import database as db
@@ -9,24 +10,47 @@ from bot_manager import bot_manager
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 MAIN_TOKEN = os.getenv("MAIN_BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0")) # ضع معرفك الشخصي في الـ Variables باسم ADMIN_ID
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
     
-    # إظهار لوحة التحكم فوراً لجميع المستخدمين دون استثناء بمجرد الدخول
+    db_data = db.get_bot(user_id)
+    if db_data and db_data[3] == 1: # الفحص إذا كان محظوراً
+        await update.message.reply_text("❌ عذراً، تم إيقاف حسابك وحظرك من استخدام المنصة من قبل الإدارة.")
+        return
+
     await show_dashboard(update, user_id, user_name)
 
 async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
-    token = update.message.text.strip()
+    text = update.message.text.strip()
     
-    # حذف حالة انتظار التوكن إذا كانت مفعلة
-    context.user_data.pop("waiting_for_token", None)
-    
+    # التحقق إذا كان الأدمن يقوم بإدخال أوامر الإدارة النصية
+    if user_id == ADMIN_ID and context.user_data.get("admin_action"):
+        action = context.user_data.get("admin_action")
+        try:
+            target_id, value = text.split(" ")
+            target_id = int(target_id)
+            
+            if action == "add_days":
+                db.add_days_to_user(target_id, int(value))
+                await update.message.reply_text(f"✅ تم إضافة {value} يوم للمستخدم `{target_id}` بنجاح.", parse_mode="Markdown")
+            elif action == "ban":
+                db.ban_user(target_id, int(value))
+                status_text = "حظر" if value == "1" else "إلغاء حظر"
+                await update.message.reply_text(f"✅ تم {status_text} المستخدم `{target_id}` بنجاح.", parse_mode="Markdown")
+        except Exception:
+            await update.message.reply_text("❌ صيغة خاطئة. يرجى الإدخال كالتالي: `المعرف القيمة` (مثال: 12345678 30)")
+        
+        context.user_data.pop("admin_action", None)
+        return
+
+    # معالجة التوكن الطبيعي للمستخدمين
+    token = text
     status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل...")
-    
     is_valid = await bot_manager.validate_token(token)
     if not is_valid:
         await status_msg.edit_text("❌ التوكن غير صالح! تأكد من الحصول عليه بشكل صحيح من @BotFather.")
@@ -40,16 +64,20 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_dashboard(update: Update, user_id: int, user_name: str):
     db_data = db.get_bot(user_id)
     
-    # تحديد الحالة والنص بناءً على وجود التوكن وتشغيله
+    days_left = "30 يوم"
     if db_data:
         status = bot_manager.get_status(user_id)
+        # حساب الوقت المتبقي الفعلي
+        if db_data[2]:
+            delta = db_data[2] - datetime.utcnow()
+            days_left = f"{max(0, delta.days)} يوم"
     else:
         status = "⚪️ غير مربوط"
         
     text = (
         f"👤 ⪪ حياك الله يا {user_name} 🦾، أهلاً وسهلاً ومرحباً بك.\n\n"
         f"🟢 ⪪ لديك اشتراك نشط، يمكنك هنا تشغيل وإيقاف البوت الخاص بك ⪪ {status}\n\n"
-        f"⏰ ⪪ اشتراكك ⪪ 36 يوم, 3 ساعة ⪪"
+        f"⏰ ⪪ اشتراكك ⪪ {days_left} ⪪"
     )
     
     keyboard = [
@@ -64,6 +92,11 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
             InlineKeyboardButton("بوت فك الحظر ❗️", callback_data="unban_bot")
         ]
     ]
+    
+    # إذا كان المستخدم هو المطور، يظهر له زر إضافي لفتح لوحة التحكم الكاملة
+    if user_id == ADMIN_ID:
+        keyboard.append([InlineKeyboardButton("👑 لوحة تحكم الإدارة 👑", callback_data="admin_panel")])
+
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     if update.message:
@@ -72,8 +105,35 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
         try:
             await update.callback_query.message.edit_text(text, reply_markup=reply_markup)
         except Exception:
-            # لتفادي الأخطاء إذا كان النص متطابقاً عند التحديث
             pass
+
+# ==================== لوحة تحكم الأدمن ====================
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """فتح اللوحة عبر أمر /admin للأدمن فقط"""
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await show_admin_panel(update)
+
+async def show_admin_panel(update: Update):
+    total, active = db.get_stats()
+    text = (
+        f"👑 **مرحباً بك في لوحة تحكم المطور الفنية** 👑\n\n"
+        f"📊 إحصائيات المنصة الحالية:\n"
+        f"👥 إجمالي البوتات المسجلة: {total}\n"
+        f"🚀 البوتات النشطة حالياً: {active}\n\n"
+        f"قم باختيار الإجراء المطلوب من الأزرار أدناه:"
+    )
+    keyboard = [
+        [InlineKeyboardButton("➕ إضافة أيام لمستخدم", callback_data="adm_add_days")],
+        [InlineKeyboardButton("🚫 حظر / إلغاء حظر مستخدم", callback_data="adm_ban")],
+        [InlineKeyboardButton("⬅️ العودة للواجهة الرئيسية", callback_data="main_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.callback_query:
+        await update.callback_query.message.edit_text(text, reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -82,23 +142,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = query.from_user.first_name
     db_data = db.get_bot(user_id)
 
+    # معالجة أزرار الإدارة
+    if query.data == "admin_panel" and user_id == ADMIN_ID:
+        await show_admin_panel(update)
+        return
+    elif query.data == "adm_add_days" and user_id == ADMIN_ID:
+        context.user_data["admin_action"] = "add_days"
+        await query.message.reply_text("📥 أرسل الآن: (معرف المستخدم المراد تعديله) ثم (فراغ) ثم (عدد الأيام).\nمثال: `12345678 30`")
+        return
+    elif query.data == "adm_ban" and user_id == ADMIN_ID:
+        context.user_data["admin_action"] = "ban"
+        await query.message.reply_text("📥 أرسل الآن: (معرف المستخدم) ثم (فراغ) ثم (1 للحظر أو 0 لإلغاء الحظر).\nمثال للحظر: `12345678 1`")
+        return
+    elif query.data == "main_menu":
+        await show_dashboard(update, user_id, user_name)
+        return
+
+    # الأزرار العامة للمستخدمين
     if query.data == "show_token_info":
         if not db_data:
-            context.user_data["waiting_for_token"] = True
-            await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن.\nفضلاً أرسل توكن البوت الخاص بك الآن ليتم حفظه ربطه تلقائياً:")
+            await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن. أرسل التوكن الخاص بك ليتم حفظه ربطه تلقائياً:")
         else:
-            token, _ = db_data
-            await query.message.reply_text(f"🔑 توكنك المسجل الحالي هو:\n`{token}`", parse_mode="Markdown")
+            await query.message.reply_text(f"🔑 توكنك المسجل الحالي هو:\n`{db_data[0]}`", parse_mode="Markdown")
             
     elif query.data == "run_bot":
         if not db_data:
-            context.user_data["waiting_for_token"] = True
-            await query.message.reply_text("⚠️ لا يمكن تشغيل النظام! يرجى إرسال توكن البوت أولاً لربطه بالمنصة:")
+            await query.message.reply_text("⚠️ يرجى إرسال توكن البوت أولاً لربطه بالمنصة:")
         else:
-            token, _ = db_data
-            success = await bot_manager.start_bot(user_id, token)
+            success = await bot_manager.start_bot(user_id, db_data[0])
             if success:
-                await query.message.reply_text("✅ تم تشغيل البوت بنجاح!\nنوع البوت: DurianRCS (حسابين)\n\n⚠️ إذا كان بوتك DURIAN أو GRIZZLY ولم يتم تشغيل البوت انتظر 5 دقائق لا تقم بإيقافه.")
+                await query.message.reply_text("✅ تم تشغيل البوت بنجاح!")
             else:
                 await query.message.reply_text("ℹ️ البوت يعمل بالفعل في الخلفية.")
             await show_dashboard(update, user_id, user_name)
@@ -107,35 +180,30 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not db_data:
             await query.message.reply_text("❌ ليس لديك بوت نشط لإيقافه.")
         else:
-            success = await bot_manager.stop_bot(user_id)
-            if success:
-                await query.message.reply_text("🛑 تم إيقاف البوت بنجاح من السيرفر.")
-            else:
-                await query.message.reply_text("ℹ️ البوت متوقف بالفعل.")
+            await bot_manager.stop_bot(user_id)
+            await query.message.reply_text("🛑 تم إيقاف البوت بنجاح من السيرفر.")
             await show_dashboard(update, user_id, user_name)
         
     elif query.data == "renew_subscription":
-        await query.message.reply_text("لتجديد اشتراكك السنوي أو الشهري، يرجى التواصل مع الإدارة مباشرة.")
+        await query.message.reply_text("لتجديد اشتراكك، يرجى التواصل مع الإدارة مباشرة.")
         
     elif query.data == "contact_support":
-        await query.message.reply_text("🤙 للدعم الفني والاستفسارات تواصل مع المطور: @YourSupportUsername")
+        await query.message.reply_text("🤙 للدعم الفني تواصل مع المطور: @YourSupportUsername")
         
     elif query.data == "unban_bot":
         await query.message.reply_text("❗️ ميزة فك الحظر التلقائي قيد التطوير والصيانة حالياً.")
 
 async def main():
     db.init_db()
-    
     main_app = Application.builder().token(MAIN_TOKEN).build()
     main_app.add_handler(CommandHandler("start", start))
-    # استقبال التوكن في أي وقت طالما أرسله المستخدم
+    main_app.add_handler(CommandHandler("admin", admin_command))
     main_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_token))
     main_app.add_handler(CallbackQueryHandler(button_handler))
 
     await main_app.initialize()
     await main_app.updater.start_polling()
     await main_app.start()
-
     await bot_manager.restore_active_bots()
 
     try:
