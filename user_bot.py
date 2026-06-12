@@ -326,4 +326,4 @@ def create_user_app(token: str):
     app.add_handler(CommandHandler("start", start_user_bot))
     app.add_handler(CallbackQueryHandler(user_bot_callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_inputs))
-    return app    return app
+    return app
