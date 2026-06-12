@@ -1,7 +1,6 @@
 import os
 import pg8000
-
-DATABASE_URL = os.getenv("DATABASE_URL")
+import time
 
 def get_connection():
     url = DATABASE_URL.strip()
@@ -20,14 +19,23 @@ def get_connection():
         host = host_port
         port = 5432
 
-    return pg8000.connect(
-        user=user,
-        password=password,
-        host=host,
-        port=port,
-        database=dbname,
-        ssl_context=True
-    )
+    # آلية ذكية لإعادة المحاولة وإيقاظ قاعدة بيانات Neon إذا كانت خاملة
+    for attempt in range(5):
+        try:
+            return pg8000.connect(
+                user=user,
+                password=password,
+                host=host,
+                port=port,
+                database=dbname,
+                ssl_context=True
+            )
+        except Exception as e:
+            if attempt == 4: # إذا فشلت كافة المحاولات الخمس
+                raise e
+            logger.warning(f"🔄 محاولة الاتصال بقاعدة البيانات فشلت ({attempt + 1}/5)، جاري إعادة المحاولة خلال ثانيتين... السبب: {e}")
+            time.sleep(2)
+
 
 def init_db():
     conn = get_connection()
