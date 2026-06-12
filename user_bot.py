@@ -277,6 +277,56 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         db.add_user_country(user_id, country_name)
         await query.message.reply_text(f"🟢 تم إضافة وتفعيل دولة **{country_name}** بنجاح في نظام الصيد الخاص بك!")
         await start_user_bot(update, context)
+        
+# ==================== 6. دالة الصيد والضخ التلقائي في الخلفية ====================
+async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
+    """دالة تعمل في الخلفية بشكل دوري كل 5 ثوانٍ لسحب الأرقام وضخها في القناة"""
+    job = context.job
+    user_id = job.user_id
+    
+    # جلب بيانات حساب الموقع وقناة الضخ وقائمة الدول للمستخدم
+    account = db.get_site_account(user_id)
+    channel = db.get_hunting_channel(user_id)
+    countries = db.get_user_countries(user_id)
+    
+    # إذا قام المستخدم بإيقاف الصيد أو مسح الإعدادات يتم إنهاء المهمة فوراً تلقائياً
+    if not account or not channel or not countries:
+        job.schedule_removal()
+        return
+
+    username, api_key = account
+    
+    try:
+        # المرور على كافة الدول التي قام هذا المستخدم بتفعيلها في نظام بوته
+        for country in countries:
+            # طلب سحب رقم جديد لهذه الدولة من الموقع (لخدمة تليجرام)
+            result = await DurianAPI.order_number(api_key, country, service="telegram")
+            
+            # إذا نجح البوت في اقتناص رقم متاح من الموقع بنجاح
+            if result and result.get("status") == "success":
+                phone_number = result.get("number")
+                order_id = result.get("order_id")
+                price = result.get("price", "0.0")
+                
+                # نص الرسالة المنسق الذي سيتم إنزاله وضخه في قناة المشترك تلقائياً
+                message_text = (
+                    f"🎯 **تم اقتناص رقم جديد بنجاح!**\n\n"
+                    f"🌍 الدولة: `{country}`\n"
+                    f"📞 الرقم: `{phone_number}`\n"
+                    f"🆔 معرف الطلب: `{order_id}`\n"
+                    f"💰 السعر: {price}$\n\n"
+                    f"⚡ نظام الصيد التلقائي مستمر في العمل وضخ الأرقام..."
+                )
+                
+                # ضخ وإرسال الرسالة إلى قناة المشترك المربوطة بالبوت الفرعي
+                await context.bot.send_message(
+                    chat_id=channel,
+                    text=message_text,
+                    parse_mode="Markdown"
+                )
+    except Exception as e:
+        # تسجيل الأخطاء صامتاً في الخلفية دون تعطيل أو إيقاف البوت الفرعي
+        print(f"Error during hunting task for user {user_id}: {e}")
 
 def create_user_app(token: str):
     app = Application.builder().token(token).build()
