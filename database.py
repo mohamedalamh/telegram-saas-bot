@@ -3,37 +3,27 @@ import pg8000
 import time
 
 def get_connection():
-    url = DATABASE_URL.strip()
-    if "?" in url:
-        url = url.split("?")[0]
-        
-    url = url.replace("postgres://", "").replace("postgresql://", "")
-    user_pass, host_db = url.split("@")
-    user, password = user_pass.split(":")
-    host_port, dbname = host_db.split("/")
+    """الاتصال الآمن والمباشر بسيرفر Neon دون تفكيك يدوي مع آلية إيقاظ وإعادة محاولة"""
+    import time
     
-    if ":" in host_port:
-        host, port = host_port.split(":")
-        port = int(port)
-    else:
-        host = host_port
-        port = 5432
+    url = DATABASE_URL.strip()
+    
+    # التأكد من توافق الرابط مع مكتبة pg8000 (تحويل postgresql إلى postgres إن وُجدت)
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgres://", 1)
 
-    # آلية ذكية لإعادة المحاولة وإيقاظ قاعدة بيانات Neon إذا كانت خاملة
+    # محاولة الاتصال 5 مرات متتالية لإيقاظ السيرفر الخامل
     for attempt in range(5):
         try:
+            # الاتصال المباشر والآمن عبر الرابط الكامل المدعوم رسمياً من pg8000
             return pg8000.connect(
-                user=user,
-                password=password,
-                host=host,
-                port=port,
-                database=dbname,
+                dsn=url,
                 ssl_context=True
             )
         except Exception as e:
-            if attempt == 4: # إذا فشلت كافة المحاولات الخمس
+            if attempt == 4: # إذا فشلت كل المحاولات
                 raise e
-            logger.warning(f"🔄 محاولة الاتصال بقاعدة البيانات فشلت ({attempt + 1}/5)، جاري إعادة المحاولة خلال ثانيتين... السبب: {e}")
+            logger.warning(f"🔄 فشل الاتصال بقاعدة بيانات Neon (المحاولة {attempt + 1}/5). جاري إعادة المحاولة خلال ثانيتين... السبب: {e}")
             time.sleep(2)
 
 
