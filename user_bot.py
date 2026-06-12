@@ -155,7 +155,7 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
         db.save_site_account(user_id, username, api_key)
         keyboard = [[InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data="main_menu")]]
         await update.message.reply_text(
-            f"✅ تم ربط حسابك بنجاح!\n\n👤 اسم المستخدم: `{username}`\n🔑 الـ API Key تم حفظه وتأمين مسار الصيد.",
+            f"✅ تم ربط حسابك بنجاح!\n\n👤 اسم المستخدم: `{username}`\n🔑 الـ API Key تم حفظه وتأمين مسار الصيد وجلب أرقام التليجرام.",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
@@ -183,7 +183,7 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             "📥 **قم بإنشاء قناة عامة أو خاصة الآن، ثم اتبع الخطوات التالية:**\n\n"
             "1️⃣ قم إضافة هذا البوت كـ **مشرف (Admin)** داخل القناة.\n"
             "2️⃣ قم بنسخ **معرف القناة (Channel ID)** وإرساله هنا كرسالة نصية.\n\n"
-            "💡 *نصيحة:* إذا كانت القناة عامة، أرسل الرابط المخفف كمعرف (مثل: `@MyHuntingChannel`). وإذا كانت خاصة، أرسل معرفها الرقمي الطويل المبتدئ بـ -100 (مثل: `-10021345678`)."
+            "💡 *نصيحة:* إذا كانت القناة عامة، أرسل الرابط المخفف كمعرف (مثل: `@MyHuntingChannel`). وإذا كانت خاصة، أرسل معرفها الرقمي الطويل المبتدئ بـ -100."
         )
         
     elif data == "add_new_site_account":
@@ -208,14 +208,17 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             return
             
         username, api_key = account
-
-        # منع تكرار نفس مهمة الفحص للمستخدم إذا كانت تعمل مسبقاً
+        
+        # التأكد من صحة الحساب وجلب نقاط الـ Score من الـ API الفعلي للموقع لقفل شروط التحقق
+        balance = await DurianAPI.get_balance_by_name(username, api_key)
+        
+        # تفادي تشغيل مهام فحص مكررة لنفس المستخدم في الخلفية
         current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
         if current_jobs:
-            await query.message.reply_text("ℹ️ نظام الصيد والضخ التلقائي يعمل بالفعل في قناتك الآن.")
+            await query.message.reply_text("ℹ️ نظام الصيد والضخ لخدمة التليجرام يعمل بالفعل في قناتك الآن.")
             return
 
-        # 🔥 إطلاق مهمة الخلفية لتبدأ بفحص وضخ الأرقام كل 5 ثوانٍ تلقائياً
+        # إطلاق مهمة الخلفية الدورية لتفحص الموقع وتسحب أرقام التليجرام كل 5 ثوانٍ تلقائياً
         context.job_queue.run_repeating(
             check_and_hunt_numbers, 
             interval=5, 
@@ -226,20 +229,20 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
         db.set_hunting_status(user_id, 1)
         await query.message.reply_text(
-            f"🚀 **تم تفعيل وضع الصيد والضخ التلقائي بنجاح!**\n\n"
+            f"🚀 **تم تفعيل وضع صيد أرقام التليجرام بنجاح!**\n\n"
             f"👤 الحساب النشط: `{username}`\n"
-            f"📢 قناة الصيد: `{channel}`\n\n"
-            f"🔄 بدأ البوت بالاتصال التلقائي بالموقع، وسيتم إنزال الأرقام المقتنصة في قناتك فور توفرها كل 5 ثوانٍ..."
+            f"💰 رصيدك في الموقع: `{balance} Score`\n"
+            f"📢 قناة الصيد والضخ: `{channel}`\n\n"
+            f"🔄 بدأ البوت بالفحص الدوري للموقع، وسيتم سحب وضخ أرقام التليجرام الحصرية في قناتك فور توفرها كل 5 ثوانٍ تلقائياً..."
         )
         
     elif data == "stop_hunting":
         db.set_hunting_status(user_id, 0)
-        # إيقاف وإلغاء مهمة الفحص الدورية في الخلفية لهذا المستخدم
         current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
         if current_jobs:
             for job in current_jobs:
                 job.schedule_removal()
-        await query.message.reply_text("🛑 تم إيقاف عملية صيد وضخ الأرقام التلقائية بنجاح.")
+        await query.message.reply_text("🛑 تم إيقاف عملية صيد وضخ أرقام التليجرام التلقائية بنجاح.")
         
     elif data.startswith("add_country_page_"):
         page = int(data.split("_")[-1])
@@ -248,17 +251,16 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         end_idx = start_idx + items_per_page
         
         page_countries = ALL_COUNTRIES[start_idx:end_idx]
-        
         text = f"🗺️ **واجهة اختيار الدول - صفحة ({page + 1}):**\n\nاضغط على اسم الدولة لتفعيل الصيد منها مباشرة:"
         keyboard = []
         
         for i in range(0, len(page_countries), 2):
             row = []
             c1 = page_countries[i]
-            row.append(InlineKeyboardButton(c1["name"], callback_data=f"save_c_{c1['name']}"))
+            row.append(InlineKeyboardButton(c1["name"], callback_data=f"save_c_{c1['name']}_{c1['code']}"))
             if i + 1 < len(page_countries):
                 c2 = page_countries[i+1]
-                row.append(InlineKeyboardButton(c2["name"], callback_data=f"save_c_{c2['name']}"))
+                row.append(InlineKeyboardButton(c2["name"], callback_data=f"save_c_{c2['name']}_{c2['code']}"))
             keyboard.append(row)
             
         nav_row = []
@@ -274,23 +276,25 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data.startswith("save_c_"):
-        country_name = data.replace("save_c_", "")
-        db.add_user_country(user_id, country_name)
-        await query.message.reply_text(f"🟢 تم إضافة وتفعيل دولة **{country_name}** بنجاح في نظام الصيد الخاص بك!")
-        await start_user_bot(update, context)
+        # استخراج اسم الدولة والرمز المكون من حرفين الممرر في الكولباك
+        parts = data.split("_")
+        country_name = parts[2]
+        country_code = parts[3]
         
+        # حفظ اسم الدولة أو رمزها المكون من حرفين في جدول PostgreSQL
+        db.add_user_country(user_id, country_code) 
+        await query.message.reply_text(f"🟢 تم إضافة وتفعيل دولة **{country_name}** بنجاح لتفعيل التليجرام!")
+        await start_user_bot(update, context)
+
 # ==================== 6. دالة الصيد والضخ التلقائي في الخلفية ====================
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
-    """دالة تعمل في الخلفية بشكل دوري كل 5 ثوانٍ لسحب الأرقام وضخها في القناة"""
     job = context.job
     user_id = job.user_id
     
-    # جلب بيانات حساب الموقع وقناة الضخ وقائمة الدول للمستخدم
     account = db.get_site_account(user_id)
     channel = db.get_hunting_channel(user_id)
     countries = db.get_user_countries(user_id)
     
-    # إذا قام المستخدم بإيقاف الصيد أو مسح الإعدادات يتم إنهاء المهمة فوراً تلقائياً
     if not account or not channel or not countries:
         job.schedule_removal()
         return
@@ -298,35 +302,23 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     username, api_key = account
     
     try:
-        # المرور على كافة الدول التي قام هذا المستخدم بتفعيلها في نظام بوته
-        for country in countries:
-            # طلب سحب رقم جديد لهذه الدولة من الموقع (لخدمة تليجرام)
-            result = await DurianAPI.order_number(api_key, country, service="telegram")
+        for country_code in countries:
+            # طلب سحب الرقم الحصري للتليجرام باستخدام pid=123 (يرجى تعديل 123 بالرقم الصحيح من حسابك بالموقع إذا لزم الأمر)
+            result = await DurianAPI.order_number_by_name(username, api_key, country_code, project_id="123")
             
-            # إذا نجح البوت في اقتناص رقم متاح من الموقع بنجاح
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
-                order_id = result.get("order_id")
-                price = result.get("price", "0.0")
                 
-                # نص الرسالة المنسق الذي سيتم إنزاله وضخه في قناة المشترك تلقائياً
+                # الرسالة المنشورة في القناة لمتابعي القناة لتفعيل التليجرام مجاناً
                 message_text = (
-                    f"🎯 **تم اقتناص رقم جديد بنجاح!**\n\n"
-                    f"🌍 الدولة: `{country}`\n"
-                    f"📞 الرقم: `{phone_number}`\n"
-                    f"🆔 معرف الطلب: `{order_id}`\n"
-                    f"💰 السعر: {price}$\n\n"
-                    f"⚡ نظام الصيد التلقائي مستمر في العمل وضخ الأرقام..."
+                    f"🎯 **تم سحب رقم تليجرام جديد متاح للتفعيل!**\n\n"
+                    f"🌍 رمز الدولة: `{country_code.upper()}`\n"
+                    f"📞 الرقم: `{phone_number}`\n\n"
+                    f"💡 *ملاحظة للمتابعين:* اطلب الكود الآن، وسيتم نشره هنا في القناة تلقائياً فور وصوله من خوادم تليجرام ⚡"
                 )
                 
-                # ضخ وإرسال الرسالة إلى قناة المشترك المربوطة بالبوت الفرعي
-                await context.bot.send_message(
-                    chat_id=channel,
-                    text=message_text,
-                    parse_mode="Markdown"
-                )
+                await context.bot.send_message(chat_id=channel, text=message_text, parse_mode="Markdown")
     except Exception as e:
-        # تسجيل الأخطاء صامتاً في الخلفية دون تعطيل أو إيقاف البوت الفرعي
         print(f"Error during hunting task for user {user_id}: {e}")
 
 def create_user_app(token: str):
@@ -334,4 +326,4 @@ def create_user_app(token: str):
     app.add_handler(CommandHandler("start", start_user_bot))
     app.add_handler(CallbackQueryHandler(user_bot_callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_inputs))
-    return app
+    return app    return app
