@@ -192,6 +192,7 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
     elif data == "start_hunting":
         account = db.get_site_account(user_id)
         channel = db.get_hunting_channel(user_id)
+        countries = db.get_user_countries(user_id)
         
         if not account:
             await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى الانتقال إلى الإعدادات ➔ إدارة الحسابات وربط حسابك أولاً.")
@@ -199,6 +200,10 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             
         if not channel:
             await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى الانتقال إلى الإعدادات ➔ إضافة قناة الصيد وربط قناتك أولاً لتتمكن المنصة من إنزال الأرقام المقتنصة فيها.")
+            return
+
+        if not countries:
+            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى الانتقال إلى ‹ اضافه دوله › وتفعيل دولة واحدة على الأقل لبدء اقتناص الأرقام.")
             return
             
         username, api_key = account
@@ -208,20 +213,39 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             await query.message.reply_text(f"⚠️ تم الاتصال بالحساب `{username}` بنجاح، ولكن رصيدك الحالي {balance}$، يرجى شحن الرصيد لبدء الصيد.")
             return
 
+        # منع تكرار نفس مهمة الفحص للمستخدم إذا كانت تعمل مسبقاً
+        current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
+        if current_jobs:
+            await query.message.reply_text("ℹ️ نظام الصيد والضخ التلقائي يعمل بالفعل في قناتك الآن.")
+            return
+
+        # تشغيل وظيفة الفحص والضخ الدورية في الخلفية كل 5 ثوانٍ تلقائياً
+        context.job_queue.run_repeating(
+            check_and_hunt_numbers, 
+            interval=5, 
+            first=1, 
+            user_id=user_id, 
+            name=f"hunt_{user_id}"
+        )
+
         context.user_data["is_hunting"] = True
         await query.message.reply_text(
-            f"🚀 **تم تفعيل وضع الصيد التلقائي بنجاح!**\n\n"
+            f"🚀 **تم تفعيل وضع الصيد والضخ التلقائي بنجاح!**\n\n"
             f"👤 الحساب النشط: `{username}`\n"
             f"💰 الرصيد الحالي: `{balance}$`\n"
             f"📢 قناة الصيد: `{channel}`\n\n"
-            f"🔄 جاري الاتصال بالموقع لبدء سحب الأرقام وضخها في قناتك تلقائياً..."
+            f"🔄 بدأ البوت الآن بالاتصال التلقائي بموقع الأرقام وسيبدأ بإنزال الأرقام في قناتك فور توفرها كل 5 ثوانٍ..."
         )
         
     elif data == "stop_hunting":
         context.user_data["is_hunting"] = False
-        await query.message.reply_text("🛑 تم إيقاف عملية صيد الأرقام بشكل كامل.")
-        
-    elif data.startswith("add_country_page_"):
+        # إلغاء وإيقاف مهمة الخلفية الخاصة بهذا المستخدم
+        current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
+        if current_jobs:
+            for job in current_jobs:
+                job.schedule_removal()
+        await update.message.reply_text("🛑 تم إيقاف عملية صيد وضخ الأرقام التلقائية بنجاح.")
+
         page = int(data.split("_")[-1])
         items_per_page = 8
         start_idx = page * items_per_page
