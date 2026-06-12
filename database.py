@@ -3,27 +3,34 @@ import pg8000
 import time
 
 def get_connection():
-    """الاتصال الآمن والمباشر بسيرفر Neon دون تفكيك يدوي مع آلية إيقاظ وإعادة محاولة"""
+    """الاتصال الآمن والمباشر بسيرفر Neon بالتفكيك البرمجي الداخلي مع آلية إعادة محاولة"""
     import time
     
-    url = DATABASE_URL.strip()
+    # تفكيك الرابط المباشر برمجياً عبر المكتبة الرسمية لتفادي أخطاء الـ Split اليدوي
+    from urllib.parse import urlparse
     
-    # التأكد من توافق الرابط مع مكتبة pg8000 (تحويل postgresql إلى postgres إن وُجدت)
-    if url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgres://", 1)
+    parsed_url = urlparse(DATABASE_URL.strip())
+    
+    username = parsed_url.username
+    password = parsed_url.password
+    host = parsed_url.hostname
+    port = parsed_url.port if parsed_url.port else 5432
+    dbname = parsed_url.path.lstrip('/')
 
     # محاولة الاتصال 5 مرات متتالية لإيقاظ السيرفر الخامل
     for attempt in range(5):
         try:
-            # الاتصال المباشر والآمن عبر الرابط الكامل المدعوم رسمياً من pg8000
             return pg8000.connect(
-                dsn=url,
+                user=username,
+                password=password,
+                host=host,
+                port=port,
+                database=dbname,
                 ssl_context=True
             )
         except Exception as e:
-            if attempt == 4: # إذا فشلت كل المحاولات
+            if attempt == 4: # إذا فشلت كافة المحاولات
                 raise e
-            logger.warning(f"🔄 فشل الاتصال بقاعدة بيانات Neon (المحاولة {attempt + 1}/5). جاري إعادة المحاولة خلال ثانيتين... السبب: {e}")
             time.sleep(2)
 
 
