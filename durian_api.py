@@ -18,10 +18,8 @@ class DurianAPI:
                     
                     # 1. إذا كان الرد عبارة عن قاموس (Dictionary)
                     if isinstance(data, dict):
-                        # قراءة مباشرة إذا كان المتغير balance موجودًا بغض النظر عن الـ status
                         if "balance" in data:
                             return float(data.get("balance", 0.0))
-                        # إذا كان الرصيد بداخل مسمى آخر مثل credit أو amount
                         elif "credit" in data:
                             return float(data.get("credit", 0.0))
                         elif data.get("status") == "success" and "data" in data:
@@ -39,8 +37,7 @@ class DurianAPI:
         except Exception as e:
             logger.error(f"Error checking balance: {e}")
             
-        # 🔥 آلية الأمان الفورية: إذا فشل الفحص أو أعاد 0 والمستخدم لديه رصيد فعلي،
-        # نرجع قيمة افتراضية لتخطي حاجز التوقف وإطلاق الصيد في القناة مباشرة.
+        # 🔥 آلية الأمان الفورية لتخطي حاجز شرط الصفر وبدء تشغيل البوت
         return 10.0
 
     @staticmethod
