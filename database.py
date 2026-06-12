@@ -1,14 +1,21 @@
 import os
-import pg8000
 import time
+import logging
+import pg8000
+from urllib.parse import urlparse
+
+# إعداد الـ Logger لضمان تسجيل أخطاء قاعدة البيانات بدقة
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_connection():
     """الاتصال الآمن والمباشر بسيرفر Neon بالتفكيك البرمجي الداخلي مع آلية إعادة محاولة"""
-    import time
-    
-    # تفكيك الرابط المباشر برمجياً عبر المكتبة الرسمية لتفادي أخطاء الـ Split اليدوي
-    from urllib.parse import urlparse
-    
+    if not DATABASE_URL:
+        logger.error("DATABASE_URL missing in environment variables!")
+        raise ValueError("DATABASE_URL is not set")
+        
     parsed_url = urlparse(DATABASE_URL.strip())
     
     username = parsed_url.username
@@ -29,16 +36,17 @@ def get_connection():
                 ssl_context=True
             )
         except Exception as e:
-            if attempt == 4: # إذا فشلت كافة المحاولات
+            if attempt == 4:
+                logger.error(f"❌ فشلت كافة محاولات الاتصال بقاعدة البيانات: {e}")
                 raise e
+            logger.warning(f"🔄 محاولة الاتصال بقاعدة البيانات فشلت ({attempt + 1}/5)، جاري إعادة المحاولة خلال ثانيتين...")
             time.sleep(2)
-
 
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # 1. إنشاء جدول البوتات الأساسي (نفس كودك الأصلي)
+    # 1. إنشاء جدول البوتات الأساسي
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_bots (
             user_id BIGINT PRIMARY KEY,
@@ -62,7 +70,7 @@ def init_db():
     except Exception:
         conn.rollback()
 
-    # 2. إنشاء جدول ربط الحسابات لموقع DurianRCS (نفس كودك الأصلي)
+    # 2. إنشاء جدول ربط الحسابات لموقع DurianRCS
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_site_accounts (
             user_id BIGINT PRIMARY KEY,
@@ -72,7 +80,7 @@ def init_db():
     ''')
     conn.commit()
 
-    # 3. إنشاء جدول قنوات الصيد (نفس كودك الأصلي)
+    # 3. إنشاء جدول قنوات الصيد الجديدة تلقائياً
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_hunting_channels (
             user_id BIGINT PRIMARY KEY,
@@ -182,7 +190,7 @@ def get_stats():
         active = cursor.fetchone()
         cursor.close()
         conn.close()
-        return total[0] if total else 0, active[0] if active else 0
+        return total if total else 0, active if active else 0
     except Exception:
         cursor.close()
         conn.close()
@@ -236,13 +244,11 @@ def get_hunting_channel(user_id):
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        return row[0] if row else None
+        return row if row else None
     except Exception:
         cursor.close()
         conn.close()
         return None
-
-# 🔥 الدوال المضافة حديثاً لتشغيل نظام الصيد وحفظ الدول مع pg8000:
 
 def set_hunting_status(user_id, is_hunting):
     status_val = 1 if is_hunting else 0
@@ -265,7 +271,7 @@ def get_user_countries(user_id):
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
-        return [row[0] for row in rows] if rows else []
+        return [row for row in rows] if rows else []
     except Exception:
         cursor.close()
         conn.close()
