@@ -67,7 +67,7 @@ def init_db():
     ''')
     conn.commit()
 
-    # 3. إنشاء جدول قنوات الصيد الجديدة تلقائياً عند الإقلاع لضمان استقرار النظام
+    # 3. إنشاء جدول قنوات الصيد
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_hunting_channels (
             user_id BIGINT PRIMARY KEY,
@@ -75,6 +75,23 @@ def init_db():
         )
     ''')
     conn.commit()
+
+    # 🔥 4. إضافة جدول الدول المفعلة لكل مستخدم (مهم جداً لربط الصيد)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_countries (
+            user_id BIGINT,
+            country_name TEXT,
+            PRIMARY KEY (user_id, country_name)
+        )
+    ''')
+    conn.commit()
+
+    # 🔥 5. إضافة عمود حالة الصيد الحالي في جدول الحسابات لتتبع التشغيل والإيقاف
+    try:
+        cursor.execute("ALTER TABLE user_site_accounts ADD COLUMN is_hunting INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        conn.rollback()
 
     cursor.close()
     conn.close()
@@ -121,7 +138,6 @@ def set_status(user_id, is_active):
     conn.close()
 
 def get_bot(user_id):
-    """جلب البيانات مرتبة بصيغة واضحة"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -193,9 +209,8 @@ def get_site_account(user_id):
         return None
 
 def save_hunting_channel(user_id, channel_id):
-    """حفظ أو تحديث معرف قناة الصيد المسجل للمستخدم"""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO user_hunting_channels (user_id, channel_id)
         VALUES (%s, %s)
@@ -207,7 +222,6 @@ def save_hunting_channel(user_id, channel_id):
     conn.close()
 
 def get_hunting_channel(user_id):
-    """جلب معرف قناة الصيد الخاص بالمستخدم"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -220,3 +234,45 @@ def get_hunting_channel(user_id):
         cursor.close()
         conn.close()
         return None
+
+# 🔥 الدوال الجديدة المضافة لضمان ربط الدول وتشغيل وإيقاف الصيد تلقائياً:
+
+def set_hunting_status(user_id, is_hunting):
+    """تحديث حالة تشغيل الصيد الفعلي للمستخدم في قاعدة البيانات"""
+    status_val = 1 if is_hunting else 0
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE user_site_accounts SET is_hunting = %s WHERE user_id = %s', (status_val, user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def get_user_countries(user_id):
+    """جلب قائمة الدول المضافة والمفعلة لصيد هذا المستخدم"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('SELECT country_name FROM user_countries WHERE user_id = %s', (user_id,))
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return [row[0] for row in rows]
+    except Exception:
+        cursor.close()
+        conn.close()
+        return []
+
+def add_user_country(user_id, country_name):
+    """إضافة دولة جديدة لقائمة الصيد الخاصة بالمستخدم"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO user_countries (user_id, country_name)
+            VALUES (%s, %s)
+            ON CONFLICT (user_id, country_name) DO NOTHING;
+        ''', (user_id, country_name))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
