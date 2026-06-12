@@ -120,6 +120,7 @@ async def show_manage_accounts(update: Update, user_id: int):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+
 # ==================== 4. معالجة الإدخالات النصية الشاملة ====================
 async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
