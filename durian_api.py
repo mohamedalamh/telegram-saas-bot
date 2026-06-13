@@ -26,7 +26,7 @@ class DurianAPI:
         return 0.0
 
     @staticmethod
-    async def order_number_by_name(username: str, api_key: str, country_code: str, project_id: str = "123") -> dict:
+    async def order_number_by_name(username: str, api_key: str, country_code: str, project_id: str = "0257") -> dict:
         """طلب سحب رقم تليجرام مخصص بناءً على واجهة getMobile الرسمية 2.1"""
         # pid: معرف مشروع تليجرام (قم بتغيير 123 برقم مشروع تليجرام الخاص بك في الموقع)
         # cuy: رمز الدولة المكون من حرفين
