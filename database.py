@@ -240,15 +240,15 @@ def get_hunting_channel(user_id):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('SELECT channel_id FROM user_hunting_channels WHERE user_id = %s', (user_id,))
+        cursor.execute(
+            'SELECT channel_id FROM user_hunting_channels WHERE user_id = %s',
+            (user_id,)
+        )
         row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
         cursor.close()
         conn.close()
-        return row if row else None
-    except Exception:
-        cursor.close()
-        conn.close()
-        return None
 
 def set_hunting_status(user_id, is_hunting):
     status_val = 1 if is_hunting else 0
@@ -267,15 +267,15 @@ def get_user_countries(user_id):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('SELECT country_name FROM user_countries WHERE user_id = %s', (user_id,))
+        cursor.execute(
+            'SELECT country_name FROM user_countries WHERE user_id = %s',
+            (user_id,)
+        )
         rows = cursor.fetchall()
+        return [row[0] for row in rows] if rows else []
+    finally:
         cursor.close()
         conn.close()
-        return [row for row in rows] if rows else []
-    except Exception:
-        cursor.close()
-        conn.close()
-        return []
 
 def add_user_country(user_id, country_name):
     conn = get_connection()
