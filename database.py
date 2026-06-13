@@ -185,9 +185,9 @@ def get_stats():
     cursor = conn.cursor()
     try:
         cursor.execute('SELECT COUNT(*) FROM user_bots')
-        total = cursor.fetchone()
+        total = cursor.fetchone()[0]
         cursor.execute('SELECT COUNT(*) FROM user_bots WHERE is_active = 1')
-        active = cursor.fetchone()
+        active = cursor.fetchone()[0]
         cursor.close()
         conn.close()
         return total if total else 0, active if active else 0
