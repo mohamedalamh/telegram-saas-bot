@@ -2,25 +2,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import database as db
 from durian_api import DurianAPI
-from telegram_checker import TelegramChecker
-import os
-
-checker = TelegramChecker(
-    api_id=int(os.getenv("API_ID")),
-    api_hash=os.getenv("API_HASH")
-)
-
-async def check_phone(phone):
-    try:
-        result = await checker.check(phone)
-
-        if result["status"] == "banned":
-            return "❌ محظور"
-        elif result["status"] == "used":
-            return "⚠️ لديه جلسة"
-        return "✅ جديد"
-    except:
-        return "⚠️ غير معروف"
 
 # القائمة الكاملة لجميع دول العالم ورموزها المتوافقة مع الـ API
 ALL_COUNTRIES = [
@@ -326,35 +307,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
             result = await DurianAPI.order_number_by_name(username, api_key, country_code, project_id="0257")
             
             if result and result.get("status") == "success":
-try:
-    phone_number = result.get("number")
-
-    status = await check_phone(phone_number)
-
-    if status == "❌ محظور":
-        continue
-
-    keyboard = [
-        [
-            InlineKeyboardButton("📩 طلب الكود", callback_data=f"code:{phone_number}"),
-            InlineKeyboardButton("❌ إلغاء الرقم", callback_data=f"cancel:{phone_number}")
-        ]
-    ]
-
-    message_text = (
-        f"🎯 رقم جديد\n\n"
-        f"📞 {phone_number}\n"
-        f"🔍 الحالة: {status}"
-    )
-
-    await context.bot.send_message(
-        chat_id=channel,
-        text=message_text,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-except Exception as e:
-    print(f"Error: {e}")
+                phone_number = result.get("number")
                 
                 # الرسالة المنشورة في القناة لمتابعي القناة لتفعيل التليجرام مجاناً
                 message_text = (
