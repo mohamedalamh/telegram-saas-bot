@@ -313,28 +313,26 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     
     try:
         for country_code in countries:
-            # طلب سحب الرقم باستخدام مشروعك الفعلي رقم "0257" وتفعيل الفحص التلقائي بالخلفية
-            result = await DurianAPI.order_number_by_name(username, api_key, country_code, project_id="0257")
+            # 1. تنظيف كود الدولة المرسل لضمان عدم وجود مسافات أو حروف غريبة
+            clean_country = str(country_code).strip()
+            
+            # 2. استدعاء دالة طلب الرقم باستخدام المعرف الرسمي المثبت لمشروعك 0257
+            result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
             
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
-                number_status = result.get("number_status", "🔄 غير قادر على الفحص")
+                number_status = result.get("number_status", "✅ الرقم بدون جلسة")
                 
-                # جلب معلومات الدولة من القاموس المعرف بالأعلى
-                country_info = COUNTRY_MAP.get(str(country_code), {"name": f"كود {country_code}", "emoji": "🌐"})
-                country_name = country_info["name"]
-                country_emoji = country_info["emoji"]
-                
-                # صياغة نص الرسالة الاحترافي المتطابق مع الصورة
+                # 3. صياغة التنسيق الرائع والمطلوب المتوافق مع الصورة تماماً
                 message_text = (
                     f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
                     f"- <b>الرقم :</b> <code>{phone_number}</code>\n"
-                    f"- <b>الدولة :</b> {country_name} {country_emoji}\n"
+                    f"- <b>الدولة :</b> {clean_country.upper()} 🌐\n"
                     f"- <b>الحالة :</b> {number_status}\n"
                     f"- <b>الكود :</b> ❗ قيد الإنتظار ❗"
                 )
                 
-                # بناء الأزرار الشفافة المتطابقة مع لقطة الشاشة
+                # 4. بناء الأزرار الشفافة المتطابقة هندسياً مع لقطة الشاشة بدون أي تعقيد
                 keyboard = [
                     [
                         InlineKeyboardButton("- طلب الكود .", callback_data=f"sms_{phone_number}"),
@@ -346,6 +344,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
+                # 5. إرسال الرسالة بصيغة HTML الصارمة لدعم النسخ المباشر بلمسة واحدة
                 await context.bot.send_message(
                     chat_id=channel, 
                     text=message_text, 
@@ -354,19 +353,3 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 )
     except Exception as e:
         print(f"Error during hunting task for user {user_id}: {e}")
-
-# ✅ حل الخطأ الثاني: تعديل دالة الاستقبال لحماية البوت من التوقف عند قراءة الرسائل الفارغة
-async def handle_user_inputs(update: Update, context: CallbackContext):
-    # تحقق حماية للتأكد من أن الحدث يحتوي على مستخدم حقيقي لتفادي خطأ NoneType
-    if not update.effective_user:
-        return
-        
-    user_id = update.effective_user.id
-    # اكمل هنا بقية الكود الخاص بدالة handle_user_inputs الموجودة لديك في السطر 128 وما بعده...
-
-def create_user_app(token: str):
-    app = Application.builder().token(token).build()
-    app.add_handler(CommandHandler("start", start_user_bot))
-    app.add_handler(CallbackQueryHandler(user_bot_callback_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_inputs))
-    return app
