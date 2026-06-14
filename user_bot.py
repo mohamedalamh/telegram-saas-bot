@@ -1,10 +1,18 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode
 import database as db
 from durian_api import DurianAPI
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
+from telegram import Update
+from telegram.ext import ContextTypes, CallbackContext
 
+COUNTRY_MAP = {
+    "679": {"name": "فيجي", "emoji": "🇫🇯"},
+    "36": {"name": "هنغاريا", "emoji": "🇭🇺"},
+    "373": {"name": "مولدوفا", "emoji": "🇲🇩"},
+    # أضف أي دول أخرى هنا بنفس الصيغة
+}
 # القائمة الكاملة لجميع دول العالم ورموزها المتوافقة مع الـ API
 ALL_COUNTRIES = [
     {"name": "روسيا 🇷🇺", "code": "ru"}, {"name": "أمريكا 🇺🇸", "code": "us"},
@@ -305,31 +313,28 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     
     try:
         for country_code in countries:
-            # 1. طلب سحب الرقم باستخدام مشروعك الفعلي رقم "0257"
-            # الدالة المحدثة في ملف durian_api.py ستقوم بالفحص الحقيقي تلقائياً في الخلفية قبل الإرجاع
+            # طلب سحب الرقم باستخدام مشروعك الفعلي رقم "0257" وتفعيل الفحص التلقائي بالخلفية
             result = await DurianAPI.order_number_by_name(username, api_key, country_code, project_id="0257")
             
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
-                
-                # 2. جلب نتيجة الفحص الحقيقية من ملف الـ API المحدث
                 number_status = result.get("number_status", "🔄 غير قادر على الفحص")
                 
-                # 3. استخراج اسم الدولة والرمز التعبيري تلقائياً بناءً على كود الدولة
+                # جلب معلومات الدولة من القاموس المعرف بالأعلى
                 country_info = COUNTRY_MAP.get(str(country_code), {"name": f"كود {country_code}", "emoji": "🌐"})
                 country_name = country_info["name"]
                 country_emoji = country_info["emoji"]
                 
-                # 4. صياغة نص الرسالة المتوافق تماماً مع التصميم المطلوب والصورة
+                # صياغة نص الرسالة الاحترافي المتطابق مع الصورة
                 message_text = (
                     f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
                     f"- <b>الرقم :</b> <code>{phone_number}</code>\n"
                     f"- <b>الدولة :</b> {country_name} {country_emoji}\n"
-                    f"- <b>الحالة :</b> {number_status}\n"  # هنا تظهر النتيجة الحقيقية (بدون جلسة، محظور، لديه جلسة)
+                    f"- <b>الحالة :</b> {number_status}\n"
                     f"- <b>الكود :</b> ❗ قيد الإنتظار ❗"
                 )
                 
-                # 5. بناء أزرار التحكم الشفافة المتطابقة مع شكل الصورة المرفقة
+                # بناء الأزرار الشفافة المتطابقة مع لقطة الشاشة
                 keyboard = [
                     [
                         InlineKeyboardButton("- طلب الكود .", callback_data=f"sms_{phone_number}"),
@@ -341,7 +346,6 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # 6. إرسال الرسالة بالتصميم الجديد والأزرار إلى قناة المشترك عبر استخدام ParseMode.HTML لدعم النقر للنسخ التلقائي
                 await context.bot.send_message(
                     chat_id=channel, 
                     text=message_text, 
@@ -350,6 +354,15 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 )
     except Exception as e:
         print(f"Error during hunting task for user {user_id}: {e}")
+
+# ✅ حل الخطأ الثاني: تعديل دالة الاستقبال لحماية البوت من التوقف عند قراءة الرسائل الفارغة
+async def handle_user_inputs(update: Update, context: CallbackContext):
+    # تحقق حماية للتأكد من أن الحدث يحتوي على مستخدم حقيقي لتفادي خطأ NoneType
+    if not update.effective_user:
+        return
+        
+    user_id = update.effective_user.id
+    # اكمل هنا بقية الكود الخاص بدالة handle_user_inputs الموجودة لديك في السطر 128 وما بعده...
 
 def create_user_app(token: str):
     app = Application.builder().token(token).build()
