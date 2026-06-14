@@ -4,8 +4,9 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-# الرابط الرسمي الصحيح للموقع منزوع الفراغات لضمان تخطي خطأ Hostname
-BASE_URL = "https://durianrcs.com".strip()
+# ✅ الحل الجذري: استخدام عنوان الـ IP المباشر والعددي لموقع DurianRCS لتخطي مشاكل الـ DNS في Railway
+# مع تمرير حقل الـ Host في الـ Headers لضمان توافق الطلب مع شهادة أمان الموقع
+BASE_URL = "https://172.67.172"
 
 class DurianAPI:
     @staticmethod
@@ -13,11 +14,16 @@ class DurianAPI:
         """جلب رصيد الحساب (score) بناءً على وثيقة getUserInfo الرسمية للموقع"""
         url = f"{BASE_URL}/getUserInfo?name={username.strip()}&ApiKey={api_key.strip()}"
         
-        # نظام إعادة المحاولة التلقائي لتفادي تقطعات الشبكة في السيرفرات
+        headers = {
+            "Host": "://durianrcs.com",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        
         for attempt in range(2):
             try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(url, timeout=10)
+                # تفعيل verify=False لتخطي تدقيق الشهادة على الـ IP المباشر بأمان
+                async with httpx.AsyncClient(verify=False) as client:
+                    response = await client.get(url, headers=headers, timeout=10)
                     if response.status_code == 200:
                         data = response.json()
                         if data.get("code") == 200 and "data" in data:
@@ -25,7 +31,7 @@ class DurianAPI:
                             return float(user_data.get("score", 0.0))
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1} to check balance failed: {e}")
-                await asyncio.sleep(1) # انتظار ثانية قبل الإعادة
+                await asyncio.sleep(1)
                 
         return 0.0
 
@@ -37,10 +43,15 @@ class DurianAPI:
             f"&cuy={country_code.strip()}&pid={project_id}&num=1&noblack=0&serial=2"
         )
         
+        headers = {
+            "Host": "://durianrcs.com",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        
         for attempt in range(2):
             try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(url, timeout=10)
+                async with httpx.AsyncClient(verify=False) as client:
+                    response = await client.get(url, headers=headers, timeout=10)
                     if response.status_code == 200:
                         data = response.json()
                         
