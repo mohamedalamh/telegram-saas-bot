@@ -326,13 +326,35 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
             result = await DurianAPI.order_number_by_name(username, api_key, country_code, project_id="0257")
             
             if result and result.get("status") == "success":
-                phone_number = result.get("number")
+                try:
+    phone_number = result.get("number")
 
-status = await check_phone(phone_number)
+    status = await check_phone(phone_number)
 
-# ❌ تجاهل المحظور (اختياري)
-if status == "❌ محظور":
-    continue
+    if status == "❌ محظور":
+        continue
+
+    keyboard = [
+        [
+            InlineKeyboardButton("📩 طلب الكود", callback_data=f"code:{phone_number}"),
+            InlineKeyboardButton("❌ إلغاء الرقم", callback_data=f"cancel:{phone_number}")
+        ]
+    ]
+
+    message_text = (
+        f"🎯 رقم جديد\n\n"
+        f"📞 {phone_number}\n"
+        f"🔍 الحالة: {status}"
+    )
+
+    await context.bot.send_message(
+        chat_id=channel,
+        text=message_text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+except Exception as e:
+    print(f"Error: {e}")
                 
                 # الرسالة المنشورة في القناة لمتابعي القناة لتفعيل التليجرام مجاناً
                 message_text = (
