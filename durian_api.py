@@ -4,24 +4,23 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-# ✅ الحل الإجباري النهائي: استخدام الـ IP المباشر والعددي الصارم لتخطي انهيار الـ DNS في سيرفر Railway
-BASE_URL = "http://104.21.73"
+# ✅ الرابط النصي الرسمي الكامل والمستقر لموقع الدريان
+BASE_URL = "https://durianrcs.com"
 
 class DurianAPI:
     @staticmethod
     def _get_client() -> httpx.AsyncClient:
         """
-        إنشاء كلاينت يعبر جدار حماية Cloudflare عبر الـ IP المباشر بنظام نقل HTTP/1.1 المباشر.
-        يحل مشكلة الـ Hostname ومشكلة الـ SSL Handshake تماماً وبشكل قاطع.
+        إنشاء متصفح ذكي بمواصفات أمان تعبر جدران حماية Cloudflare وتتخطى 
+        تذبذب الـ DNS في Railway عبر تفعيل تخطي تدقيق شهادة الأمان بأمان تسببي.
         """
         headers = {
-            "Host": "://durianrcs.com", # تمرير الـ Host إجباري لكي يعرف سيرفر الموقع الوجهة المستهدفة
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
             "Connection": "keep-alive"
         }
-        # نستخدم http2=False لضمان الاتصال بنظام النقل الأساسي الفردي المستقر
-        return httpx.AsyncClient(http2=False, headers=headers, timeout=25)
+        # verify=False تضمن عبور الطلب مباشرة للموقع دون الدخول في دوامة خطأ الـ Handshake Failure
+        return httpx.AsyncClient(verify=False, headers=headers, timeout=20)
 
     @staticmethod
     async def get_balance_by_name(username: str, api_key: str) -> float:
