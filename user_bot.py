@@ -353,3 +353,19 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 )
     except Exception as e:
         print(f"Error during hunting task for user {user_id}: {e}")
+
+# ✅ حل الخطأ الثاني: تعديل دالة الاستقبال لحماية البوت من التوقف عند قراءة الرسائل الفارغة
+async def handle_user_inputs(update: Update, context: CallbackContext):
+    # تحقق حماية للتأكد من أن الحدث يحتوي على مستخدم حقيقي لتفادي خطأ NoneType
+    if not update.effective_user:
+        return
+        
+    user_id = update.effective_user.id
+    # اكمل هنا بقية الكود الخاص بدالة handle_user_inputs الموجودة لديك في السطر 128 وما بعده...
+
+def create_user_app(token: str):
+    app = Application.builder().token(token).build()
+    app.add_handler(CommandHandler("start", start_user_bot))
+    app.add_handler(CallbackQueryHandler(user_bot_callback_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_inputs))
+    return app
