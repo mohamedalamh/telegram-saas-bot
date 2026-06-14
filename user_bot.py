@@ -2,6 +2,25 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import database as db
 from durian_api import DurianAPI
+from telegram_checker import TelegramChecker
+import os
+
+checker = TelegramChecker(
+    api_id=int(os.getenv("API_ID")),
+    api_hash=os.getenv("API_HASH")
+)
+
+async def check_phone(phone):
+    try:
+        result = await checker.check(phone)
+
+        if result["status"] == "banned":
+            return "❌ محظور"
+        elif result["status"] == "used":
+            return "⚠️ لديه جلسة"
+        return "✅ جديد"
+    except:
+        return "⚠️ غير معروف"
 
 # القائمة الكاملة لجميع دول العالم ورموزها المتوافقة مع الـ API
 ALL_COUNTRIES = [
@@ -308,6 +327,12 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
             
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
+
+status = await check_phone(phone_number)
+
+# ❌ تجاهل المحظور (اختياري)
+if status == "❌ محظور":
+    continue
                 
                 # الرسالة المنشورة في القناة لمتابعي القناة لتفعيل التليجرام مجاناً
                 message_text = (
