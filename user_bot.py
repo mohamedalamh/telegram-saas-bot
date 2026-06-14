@@ -303,21 +303,48 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     
     try:
         for country_code in countries:
-            # طلب سحب الرقم الحصري للتليجرام باستخدام pid=123 (يرجى تعديل 123 بالرقم الصحيح من حسابك بالموقع إذا لزم الأمر)
+            # 1. طلب سحب الرقم باستخدام مشروعك رقم 0257 (الدالة ستقوم بالفحص تلقائياً في الخلفية)
             result = await DurianAPI.order_number_by_name(username, api_key, country_code, project_id="0257")
             
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
+                
+                # 2. جلب نتيجة الفحص الحقيقية من ملف durian_api.py
                 number_status = result.get("number_status", "🔄 غير قادر على الفحص")
-                # الرسالة المنشورة في القناة لمتابعي القناة لتفعيل التليجرام مجاناً
+                
+                # 3. تحديد اسم الدولة وعلمها تلقائياً بناءً على كودها
+                country_info = COUNTRY_MAP.get(str(country_code), {"name": f"كود {country_code}", "emoji": "🌐"})
+                country_name = country_info["name"]
+                country_emoji = country_info["emoji"]
+                
+                # 4. صياغة نص الرسالة الاحترافي المتطابق تماماً مع الصورة
                 message_text = (
-                    f"🎯 **تم سحب رقم تليجرام جديد متاح للتفعيل!**\n\n"
-                    f"🌍 رمز الدولة: `{country_code.upper()}`\n"
-                    f"📞 الرقم: `{phone_number}`\n\n"
-                    f"💡 *ملاحظة للمتابعين:* اطلب الكود الآن، وسيتم نشره هنا في القناة تلقائياً فور وصوله من خوادم تليجرام ⚡"
+                    f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
+                    f"- <b>الرقم :</b> <code>{phone_number}</code>\n"
+                    f"- <b>الدولة :</b> {country_name} {country_emoji}\n"
+                    f"- <b>الحالة :</b> {number_status}\n"
+                    f"- <b>الكود :</b> ❗ قيد الإنتظار ❗"
                 )
                 
-                await context.bot.send_message(chat_id=channel, text=message_text, parse_mode="Markdown")
+                # 5. بناء الأزرار الشفافة التفاعلية المتطابقة مع لقطة الشاشة
+                keyboard = [
+                    [
+                        InlineKeyboardButton("- طلب الكود .", callback_data=f"sms_{phone_number}"),
+                        InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
+                    ],
+                    [
+                        InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # 6. إرسال الرسالة بالتصميم الجديد إلى القناة المحددة للمشترك
+                await context.bot.send_message(
+                    chat_id=channel, 
+                    text=message_text, 
+                    parse_mode=ParseMode.HTML, # استخدام HTML لدعم ميزة النسخ بنقرة واحدة
+                    reply_markup=reply_markup
+                )
     except Exception as e:
         print(f"Error during hunting task for user {user_id}: {e}")
 
