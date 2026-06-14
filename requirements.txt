@@ -4,4 +4,3 @@ httpx
 pg8000==1.31.2
 pyrogram
 TgCrypto
-telethon
