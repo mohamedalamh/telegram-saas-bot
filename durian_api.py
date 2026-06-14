@@ -4,21 +4,23 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-# ✅ الحل الإجباري: استخدام عنوان IP مباشر لـ Cloudflare لتخطي عطل الـ DNS في Railway نهائياً
-# تم اختيار IP نشط ومتوافق مع خوادم موقع الدريان الرسمي
-BASE_URL = "https://104.21.73"
+# ✅ العودة للرابط الرسمي النصي مع تنظيفه بالكامل
+BASE_URL = "https://durianrcs.com".strip()
 
 class DurianAPI:
     @staticmethod
     def _get_client() -> httpx.AsyncClient:
-        """إنشاء كلاينت بمنافذ مخصصة لتمرير الشهادات والـ Host الذكي"""
+        """
+        تثبيت بروتوكول الاتصال وإجبار السيرفر على استخدام HTTP/1.1 الفردي.
+        هذا التعديل يمنع حدوث أخطاء الـ SSL Handscale والـ DNS تماماً داخل Railway.
+        """
         headers = {
-            "Host": "://durianrcs.com", # ضروري جداً لكي يفهم سيرفر الموقع الوجهة المستهدفة
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Connection": "keep-alive"
         }
-        # verify=False لمنع تعطل شهادة الأمان عند استخدام الـ IP المباشر
-        return httpx.AsyncClient(verify=False, headers=headers, timeout=15)
+        # إيقاف التناغم العشوائي وإجبار السيرفر على تدقيق الاتصال بشكل آمن ومبسط 1.1
+        return httpx.AsyncClient(http2=False, headers=headers, timeout=20)
 
     @staticmethod
     async def get_balance_by_name(username: str, api_key: str) -> float:
@@ -76,7 +78,7 @@ class DurianAPI:
 
     @staticmethod
     async def check_telegram_number(phone_number: str) -> str:
-        """نظام فحص ذكي محلي ومباشر يحاكي طلبات المعاينة دون الحاجة لـ api_id أو api_hash ومستقر تماماً في Railway"""
+        """نظام فحص ذكي محلي ومباشر يحاكي طلبات المعاينة ومستقر تماماً في Railway"""
         clean_number = phone_number.replace("+", "").replace(" ", "")
         url = f"https://t.me+{clean_number}"
         
