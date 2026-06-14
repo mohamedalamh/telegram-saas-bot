@@ -194,6 +194,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data in ["renew_subscription", "contact_support", "unban_bot"]:
         await query.message.reply_text("ℹ️ هذا الخيار قيد التهيئة الفنية حالياً.")
 
+elif query.data.startswith("code:"):
+    phone = query.data.split(":")[1]
+
+    await query.message.reply_text("⏳ جاري طلب الكود...")
+
+    code = durian_api.get_msg(phone)
+
+    await query.message.reply_text(f"📩 الكود: {code}")
+
+elif query.data.startswith("cancel:"):
+    phone = query.data.split(":")[1]
+
+    await query.message.reply_text(f"❌ تم إلغاء الرقم: {phone}")
+
 async def safe_restore():
     try:
         await bot_manager.restore_active_bots()
