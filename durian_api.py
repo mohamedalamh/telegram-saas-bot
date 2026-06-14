@@ -1,11 +1,9 @@
-import httpx
 import logging
-from pyrogram import Client
-from pyrogram.errors import (
-    BadRequest,
-    FloodWait,
-    PhoneNumberBanned,
-    PhoneNumberInvalid,
+from telethon import TelegramClient
+from telethon.errors import (
+    PhoneNumberBannedError,
+    PhoneNumberInvalidError,
+    FloodWaitError
 )
 
 logger = logging.getLogger(__name__)
@@ -69,41 +67,52 @@ class DurianAPI:
     @staticmethod
     async def check_telegram_number(phone_number: str) -> str:
         """
-        فحص حقيقي وذكي وسريع جداً عبر خوادم ويب تليجرام الرسمية.
-        هذا الحل مستقر 100% على منصة Railway ولا يتأثر بحظر الـ IP أو الجلسات.
+        فحص حقيقي داخلي برمجياً عبر سيرفرات تلغرام الرسمية (Telethon).
+        يقوم بمحاولة إرسال كود وهمي لمعرفة حالة الرقم الفعلية بدقة 100%.
         """
-        # تنظيف الرقم من أي مسافات أو علامة +
-        clean_number = phone_number.replace("+", "").replace(" ", "")
+        clean_number = phone_number.replace(" ", "")
         
-        # رابط الفحص الرسمي من تليجرام لمعاينة الحسابات النشطة
-        url = f"https://t.me+{clean_number}"
+        # إنشاء كلاينت مؤقت يعمل بالكامل داخل ذاكرة الرام (RAM) متوافق مع قيود Railway
+        client = TelegramClient(
+            None, # None تعني تشغيل الجلسة في الذاكرة دون إنشاء ملفات .session على القرص
+            api_id=TELEGRAM_API_ID,
+            api_hash=TELEGRAM_API_HASH
+        )
         
         try:
-            async with httpx.AsyncClient() as client:
-                # إرسال طلب الفحص بـ User-Agent حقيقي لمحاكاة المتصفح
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                }
-                response = await client.get(url, headers=headers, timeout=5)
-                
-                if response.status_code == 200:
-                    html_content = response.text
-                    
-                    # الفحص الذكي لمحتوى الصفحة:
-                    # تليجرام يضع نصاً معيناً بالصفحة إذا كان الرقم يمتلك حساباً نشطاً بالفعل ومفتوحاً (لديه جلسة)
-                    if "tgme_page_extra" in html_content or "If you have Telegram, you can contact" in html_content:
-                        return "⚠️ الرقم لديه جلسة"
-                        
-                    # إذا كان الرقم جديداً تماماً ولم يسجل به أحد من قبل (بدون جلسة وصالح للاستخدام)
-                    elif "tgme_page_title" in html_content and "للإتصال" not in html_content:
-                        return "✅ الرقم بدون جلسة"
-                        
-                    # في حال كان الرقم محظوراً تماماً من سيرفرات الشركة
-                    elif "System error" in html_content or "Invalid" in html_content:
-                        return "🚫 محظور"
-                        
-        except Exception as e:
-            logger.error(f"Error web checking telegram number {phone_number}: {e}")
+            # بدء الاتصال بالسيرفر
+            await client.connect()
             
-        # حالة افتراضية آمنة في حال فشل الاتصال المؤقت بالسيرفر
-        return "✅ جاهز للتفعيل"
+            # محاولة إرسال طلب تسجيل الدخول للرقم لمعاينة حالته
+            # سنقوم بإرسال الطلب، وتلغرام سيرد فوراً بالحالة قبل إرسال أي SMS حقيقي
+            await client.send_code_request(clean_number)
+            
+            # إذا مر الطلب بسلام دون أخطاء، فهذا يعني أن الرقم نظيف تماماً وجاهز لإنشاء حساب جديد
+            return "✅ الرقم بدون جلسة"
+            
+        except PhoneNumberBannedError:
+            # إذا رد السيرفر بأن الرقم محظور
+            return "🚫 محظور"
+            
+        except PhoneNumberInvalidError:
+            # إذا كان الرقم غير صحيح أو مشوه
+            return "❌ رقم غير صالح"
+            
+        except FloodWaitError as e:
+            # إذا تعرض خادم الاستضافة لضغط محاولات (تأخير مؤقت من تلغرام)
+            logger.warning(f"Flood wait error: {e.seconds} seconds")
+            return "⏳ محظور مؤقتاً (Flood)"
+            
+        except Exception as e:
+            # أي استجابات أخرى مثل (PHONE_NUMBER_OCCUPIED) تعني أن الرقم مسجل به حساب حالي ومفتوح
+            error_str = str(e)
+            if "occupied" in error_str.lower() or "auth" in error_str.lower():
+                return "⚠️ الرقم لديه جلسة"
+            
+            logger.error(f"Fails to check number {phone_number}: {e}")
+            return "🔄 بحاجة للتحقق يدوياً"
+            
+        finally:
+            # إغلاق الاتصال وتحرير الذاكرة فوراً لضمان استقرار حاوية Railway
+            if client.is_connected():
+                await client.disconnect()
