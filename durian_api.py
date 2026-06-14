@@ -1,4 +1,5 @@
 import logging
+import httpx
 from telethon import TelegramClient
 from telethon.errors import (
     PhoneNumberBannedError,
