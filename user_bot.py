@@ -1,5 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
 import database as db
 from durian_api import DurianAPI
 
@@ -303,30 +305,31 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     
     try:
         for country_code in countries:
-            # 1. طلب سحب الرقم باستخدام مشروعك رقم 0257 (الدالة ستقوم بالفحص تلقائياً في الخلفية)
+            # 1. طلب سحب الرقم باستخدام مشروعك الفعلي رقم "0257"
+            # الدالة المحدثة في ملف durian_api.py ستقوم بالفحص الحقيقي تلقائياً في الخلفية قبل الإرجاع
             result = await DurianAPI.order_number_by_name(username, api_key, country_code, project_id="0257")
             
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
                 
-                # 2. جلب نتيجة الفحص الحقيقية من ملف durian_api.py
+                # 2. جلب نتيجة الفحص الحقيقية من ملف الـ API المحدث
                 number_status = result.get("number_status", "🔄 غير قادر على الفحص")
                 
-                # 3. تحديد اسم الدولة وعلمها تلقائياً بناءً على كودها
+                # 3. استخراج اسم الدولة والرمز التعبيري تلقائياً بناءً على كود الدولة
                 country_info = COUNTRY_MAP.get(str(country_code), {"name": f"كود {country_code}", "emoji": "🌐"})
                 country_name = country_info["name"]
                 country_emoji = country_info["emoji"]
                 
-                # 4. صياغة نص الرسالة الاحترافي المتطابق تماماً مع الصورة
+                # 4. صياغة نص الرسالة المتوافق تماماً مع التصميم المطلوب والصورة
                 message_text = (
                     f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
                     f"- <b>الرقم :</b> <code>{phone_number}</code>\n"
                     f"- <b>الدولة :</b> {country_name} {country_emoji}\n"
-                    f"- <b>الحالة :</b> {number_status}\n"
+                    f"- <b>الحالة :</b> {number_status}\n"  # هنا تظهر النتيجة الحقيقية (بدون جلسة، محظور، لديه جلسة)
                     f"- <b>الكود :</b> ❗ قيد الإنتظار ❗"
                 )
                 
-                # 5. بناء الأزرار الشفافة التفاعلية المتطابقة مع لقطة الشاشة
+                # 5. بناء أزرار التحكم الشفافة المتطابقة مع شكل الصورة المرفقة
                 keyboard = [
                     [
                         InlineKeyboardButton("- طلب الكود .", callback_data=f"sms_{phone_number}"),
@@ -338,11 +341,11 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # 6. إرسال الرسالة بالتصميم الجديد إلى القناة المحددة للمشترك
+                # 6. إرسال الرسالة بالتصميم الجديد والأزرار إلى قناة المشترك عبر استخدام ParseMode.HTML لدعم النقر للنسخ التلقائي
                 await context.bot.send_message(
                     chat_id=channel, 
                     text=message_text, 
-                    parse_mode=ParseMode.HTML, # استخدام HTML لدعم ميزة النسخ بنقرة واحدة
+                    parse_mode=ParseMode.HTML, 
                     reply_markup=reply_markup
                 )
     except Exception as e:
