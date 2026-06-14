@@ -308,7 +308,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
             
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
-                
+                number_status = result.get("number_status", "🔄 غير قادر على الفحص")
                 # الرسالة المنشورة في القناة لمتابعي القناة لتفعيل التليجرام مجاناً
                 message_text = (
                     f"🎯 **تم سحب رقم تليجرام جديد متاح للتفعيل!**\n\n"
