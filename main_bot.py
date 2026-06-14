@@ -6,7 +6,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import database as db
 from bot_manager import bot_manager
-from number_enhancer import check_phone
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -193,11 +192,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif query.data in ["renew_subscription", "contact_support", "unban_bot"]:
         await query.message.reply_text("ℹ️ هذا الخيار قيد التهيئة الفنية حالياً.")
-
-elif query.data.startswith("cancel:"):
-    phone = query.data.split(":")[1]
-
-    await query.message.reply_text(f"❌ تم إلغاء الرقم: {phone}")
 
 async def safe_restore():
     try:
