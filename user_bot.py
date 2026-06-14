@@ -326,7 +326,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
             result = await DurianAPI.order_number_by_name(username, api_key, country_code, project_id="0257")
             
             if result and result.get("status") == "success":
-                try:
+try:
     phone_number = result.get("number")
 
     status = await check_phone(phone_number)
