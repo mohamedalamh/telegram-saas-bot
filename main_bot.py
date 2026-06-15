@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import sqlite3  # تم استيراده لقراءة قائمة الـ IDs مباشرة بأمان
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -70,19 +71,20 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
                 
-                # تنفيذ أمر الحذف من قاعدة البيانات (إذا كانت الدالة مدعومة بملف الداتابيز، وإلا يرجى التأكد من اسم دالة الحذف لديك)
-                if hasattr(db, "delete_user"):
-                    db.delete_user(target_id)
-                elif hasattr(db, "delete_bot"):
-                    db.delete_bot(target_id)
+                # تنفيذ أمر الحذف من قاعدة البيانات مباشرة لضمان المسح
+                conn = sqlite3.connect("database.db")
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM bots WHERE user_id = ?", (target_id,))
+                conn.commit()
+                conn.close()
                 
                 await update.message.reply_text(f"🗑️ تم حذف المستخدم `{target_id}` نهائياً من النظام وإيقاف خط السحب الخاص به.")
             except Exception as e:
-                await update.message.reply_text(f"❌ فشل تنفيذ الحذف، تأكد من صحة الـ ID. الخطأ: {e}")
+                await update.message.reply_text(f"❌ فشل تنفيذ الحذف. الخطأ: {e}")
             context.user_data.pop("admin_action", None)
             return
 
-    # استقبال التوكن الجديد وحفظه للمستخدم العادي بشكل طبيعي
+    # استقبال التوكن الجديد وحفظه للمسخدم العادي بشكل طبيعي
     status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل وحفظه...")
     is_valid = await bot_manager.validate_token(text)
     if not is_valid:
@@ -209,17 +211,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         elif query.data == "adm_get_ids":
             try:
-                # محاولة جلب المستخدمين إذا كانت قاعدة البيانات تدعم جلب القائمة
-                if hasattr(db, "get_all_users"):
-                    users = db.get_all_users()
-                    user_list = "\n".join([f"👤 ID: `{u[0]}`" for u in users]) if users else "لا يوجد مستخدمين بعد."
-                else:
-                    total, active = db.get_stats()
-                    user_list = f"عدد الحسابات الكلي: {total}\n(جلب التفاصيل النصية بالـ ID يتطلب ربط دالة استعلام مخصصة)"
+                # قراءة المعرفات مباشرة من قاعدة البيانات وعرضها بدقة
+                conn = sqlite3.connect("database.db")
+                cursor = conn.cursor()
+                cursor.execute("SELECT user_id FROM bots")
+                rows = cursor.fetchall()
+                conn.close()
                 
-                text = f"🆔 **قائمة معرّفات مستخدمي البوت الرئيسي:**\n\n{user_list}"
+                if rows:
+                    user_list = "\n".join([f"👤 ID: `{row[0]}`" for row in rows])
+                else:
+                    user_list = "لا يوجد مستخدمين مسجلين حالياً."
+                
+                text = f"🆔 **قائمة معرّفات مستخدمي البوت الرئيسي التفصيلية:**\n\n{user_list}"
             except Exception as e:
-                text = f"❌ تعذر استخراج المعرفات نصياً: {e}"
+                text = f"❌ تعذر استخراج المعرفات من جدول البيانات: {e}"
                 
             keyboard = [[InlineKeyboardButton("🔙 العودة للوحة الإدارة", callback_data="admin_panel")]]
             await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
@@ -257,7 +263,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("🛑 تم إيقاف البوت بنجاح.")
             await show_dashboard(update, user_id, user_name)
         
-    elif query.data in ["renew_subscription", "contact_support", "unban_bot"]:
+    elif query.data == "renew_subscription":
+        # حل مشكلة تجديد الاشتراك: يرسل للمستخدم رابطاً مباشراً لمالك البوت (الأدمن) للتجديد مع رقم تعريفه
+        bot_info = await context.bot.get_me()
+        admin_link = f"https://t.me/{bot_info.username}?start="  # أو ضع رابط حسابك الشخصي المباشر هنا t.me/username
+        await query.message.reply_text(
+            f"⚙️ **لتجديد اشتراكك الشهري:**\n\n"
+            f"يرجى التواصل مع الإدارة مباشرة وتزويدهم بالمعرف الخاص بك لتفعيل باقتك:\n"
+            f"🆔 معرف حسابك: `{user_id}`", 
+            parse_mode="Markdown"
+        )
+
+    elif query.data in ["contact_support", "unban_bot"]:
         await query.message.reply_text("ℹ️ هذا الخيار قيد التهيئة الفنية حالياً.")
 
 async def safe_restore():
