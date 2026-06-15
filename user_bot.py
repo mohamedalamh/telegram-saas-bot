@@ -313,28 +313,26 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     
     try:
         for country_code in countries:
+            # 1. تنظيف كود الدولة المرسل لضمان عدم وجود مسافات أو حروف غريبة
             clean_country = str(country_code).strip()
             
-            # 1. طلب سحب الرقم من موقع دوريان
+            # 2. استدعاء دالة طلب الرقم باستخدام المعرف الرسمي المثبت لمشروعك 0257
             result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
             
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
-                order_id = result.get("order_id")
+                number_status = result.get("number_status", "✅ الرقم بدون جلسة")
                 
-                # 2. الفحص البرمجي اللحظي للرقم لمعرفة حالته (محظور، مستخدم، أو جديد)
-                check_result = await check_phone(phone_number)
-                
-                # 3. صياغة التنسيق ونشر الرقم في القناة مهما كانت حالته
+                # 3. صياغة التنسيق الرائع والمطلوب المتوافق مع الصورة تماماً
                 message_text = (
                     f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
                     f"- <b>الرقم :</b> <code>{phone_number}</code>\n"
                     f"- <b>الدولة :</b> {clean_country.upper()} 🌐\n"
-                    f"- <b>الحالة :</b> {check_result}\n" # هنا ستظهر الحالة الفعلية: (❌ محظور) أو (⚠️ مستخدم / لديه جلسة) أو (✅ جديد)
+                    f"- <b>الحالة :</b> {number_status}\n"
                     f"- <b>الكود :</b> ❗ قيد الإنتظار ❗"
                 )
                 
-                # بناء الأزرار الشفافة التفاعلية للتحكم بالرقم يدوياً من القناة
+                # 4. بناء الأزرار الشفافة المتطابقة هندسياً مع لقطة الشاشة بدون أي تعقيد
                 keyboard = [
                     [
                         InlineKeyboardButton("- طلب الكود .", callback_data=f"sms_{phone_number}"),
@@ -346,7 +344,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # إرسال الرسالة إلى القناة مباشرة
+                # 5. إرسال الرسالة بصيغة HTML الصارمة لدعم النسخ المباشر بلمسة واحدة
                 await context.bot.send_message(
                     chat_id=channel, 
                     text=message_text, 
@@ -354,7 +352,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=reply_markup
                 )
     except Exception as e:
-        logger.error(f"Error during hunting task for user {user_id}: {e}")
+        print(f"Error during hunting task for user {user_id}: {e}")
 
 # ✅ حل الخطأ الثاني: تعديل دالة الاستقبال لحماية البوت من التوقف عند قراءة الرسائل الفارغة
 async def handle_user_inputs(update: Update, context: CallbackContext):
