@@ -34,23 +34,55 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     text = update.message.text.strip()
     
+    # التحقق مما إذا كان المدخل نصاً موجهاً للإدارة
     if ADMIN_ID != 0 and user_id == ADMIN_ID and context.user_data.get("admin_action"):
         action = context.user_data.get("admin_action")
-        try:
-            target_id, value = text.split(" ")
-            target_id = int(target_id)
-            if action == "add_days":
+        
+        if action == "add_days":
+            try:
+                target_id, value = text.split(" ")
+                target_id = int(target_id)
                 db.add_days_to_user(target_id, int(value))
-                await update.message.reply_text(f"✅ تم إضافة {value} يوم للمستخدم `{target_id}`.")
-            elif action == "ban":
-                db.ban_user(target_id, int(value))
-                await update.message.reply_text(f"✅ تم تعديل حالة حظر المستخدم `{target_id}`.")
-        except Exception:
-            await update.message.reply_text("❌ صيغة خاطئة. يرجى الإدخال: `المعرف القيمة`")
-        context.user_data.pop("admin_action", None)
-        return
+                await update.message.reply_text(f"✅ تم إضافة {value} يوم للمستخدم `{target_id}` بنجاح.")
+            except Exception:
+                await update.message.reply_text("❌ صيغة خاطئة. يرجى إدخال: `المعرف القيمة` (مثال: `834033986 30`)")
+            context.user_data.pop("admin_action", None)
+            return
 
-    # استقبال التوكن الجديد وحفظه بشكل قسري مباشر
+        elif action == "ban":
+            try:
+                target_id, value = text.split(" ")
+                target_id = int(target_id)
+                db.ban_user(target_id, int(value))
+                status_text = "حظر" if int(value) == 1 else "إلغاء حظر"
+                await update.message.reply_text(f"✅ تم تعديل حالة المستخدم `{target_id}` إلى: **{status_text}**.")
+            except Exception:
+                await update.message.reply_text("❌ صيغة خاطئة. يرجى إدخال: `المعرف القيمة` (مثال للحظر: `834033986 1`)")
+            context.user_data.pop("admin_action", None)
+            return
+
+        elif action == "delete_user":
+            try:
+                target_id = int(text)
+                # إيقاف البوت الفرعي أولاً لحمايته من التعليق
+                try:
+                    await bot_manager.stop_bot(target_id)
+                except Exception:
+                    pass
+                
+                # تنفيذ أمر الحذف من قاعدة البيانات (إذا كانت الدالة مدعومة بملف الداتابيز، وإلا يرجى التأكد من اسم دالة الحذف لديك)
+                if hasattr(db, "delete_user"):
+                    db.delete_user(target_id)
+                elif hasattr(db, "delete_bot"):
+                    db.delete_bot(target_id)
+                
+                await update.message.reply_text(f"🗑️ تم حذف المستخدم `{target_id}` نهائياً من النظام وإيقاف خط السحب الخاص به.")
+            except Exception as e:
+                await update.message.reply_text(f"❌ فشل تنفيذ الحذف، تأكد من صحة الـ ID. الخطأ: {e}")
+            context.user_data.pop("admin_action", None)
+            return
+
+    # استقبال التوكن الجديد وحفظه للمستخدم العادي بشكل طبيعي
     status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل وحفظه...")
     is_valid = await bot_manager.validate_token(text)
     if not is_valid:
@@ -68,7 +100,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_dashboard(update, user_id, user_name)
 
 async def show_dashboard(update: Update, user_id: int, user_name: str):
-    days_left = "36 يوم, 3 ساعة"
+    days_left = "36 يوم"
     status = "⚪️ غير مربوط"
     
     try:
@@ -82,7 +114,7 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
                 delta = expires_at.replace(tzinfo=None) - datetime.now(timezone.utc).replace(tzinfo=None)
                 days_left = f"{max(0, delta.days)} يوم"
     except Exception:
-        days_left = "36 يوم, 3 ساعة"
+        days_left = "36 يوم"
 
     text = (
         f"👤 ⪪ حياك الله يا {user_name} 🦾، أهلاً وسهلاً ومرحباً بك.\n\n"
@@ -91,12 +123,12 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
     )
     
     keyboard = [
-        [InlineKeyboardButton("توكن البوت", callback_data="show_token_info")],
+        [InlineKeyboardButton("🔑 توكن البوت", callback_data="show_token_info")],
         [
             InlineKeyboardButton("إيقاف البوت ❌", callback_data="stop_bot"),
             InlineKeyboardButton("تشغيل البوت ✅", callback_data="run_bot")
         ],
-        [InlineKeyboardButton("تجديد الإشتراك", callback_data="renew_subscription")],
+        [InlineKeyboardButton("🔄 تجديد الإشتراك", callback_data="renew_subscription")],
         [
             InlineKeyboardButton("تواصل مع الدعم 🤙", callback_data="contact_support"),
             InlineKeyboardButton("بوت فك الحظر ❗️", callback_data="unban_bot")
@@ -127,10 +159,23 @@ async def show_admin_panel(update: Update):
     except Exception:
         total, active = 0, 0
 
-    text = f"👑 **لوحة تحكم المطور الفنية** 👑\n\n👥 إجمالي البوتات: {total}\n🚀 النشطة: {active}"
+    text = (
+        f"👑 **لوحة تحكم المطور الفنية الشاملة** 👑\n\n"
+        f"📊 **إحصائيات النظام الفورية:**\n"
+        f"👥 إجمالي المستخدمين في النظام: {total}\n"
+        f"🚀 البوتات الفرعية النشطة حالياً: {active}\n\n"
+        f"⚙️ قم باختيار الإجراء المناسب لإدارة المشتركين والاشتراكات الشهرية:"
+    )
+    
     keyboard = [
-        [InlineKeyboardButton("➕ إضافة أيام لمستخدم", callback_data="adm_add_days")],
-        [InlineKeyboardButton("🚫 حظر / إلغاء حظر مستخدم", callback_data="adm_ban")],
+        [
+            InlineKeyboardButton("➕ شحن/تجديد الأيام", callback_data="adm_add_days"),
+            InlineKeyboardButton("🚫 حظر / إلغاء حظر", callback_data="adm_ban")
+        ],
+        [
+            InlineKeyboardButton("🗑️ حذف مستخدم نهائياً", callback_data="adm_delete_user"),
+            InlineKeyboardButton("🆔 استخراج الـ IDs المشتركة", callback_data="adm_get_ids")
+        ],
         [InlineKeyboardButton("⬅️ العودة للواجهة الرئيسية", callback_data="main_menu")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -145,17 +190,39 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     user_name = query.from_user.first_name
 
+    # معالجة ضغطات أزرار الإدارة للأدمن
     if ADMIN_ID != 0 and user_id == ADMIN_ID:
         if query.data == "admin_panel":
             await show_admin_panel(update)
             return
         elif query.data == "adm_add_days":
             context.user_data["admin_action"] = "add_days"
-            await query.message.reply_text("📥 أرسل: (معرف المستخدم) (عدد الأيام)")
+            await query.message.reply_text("📥 أرسل معرف المستخدم وعدد الأيام مفصولين بمسافة:\nمثال: `834033986 30`")
             return
         elif query.data == "adm_ban":
             context.user_data["admin_action"] = "ban"
-            await query.message.reply_text("📥 أرسل: (معرف المستخدم) (1 للحظر أو 0 للإلغاء)")
+            await query.message.reply_text("📥 أرسل معرف المستخدم وحالته مفصولين بمسافة:\n(`1` للحظر أو `0` لإلغاء الحظر)\nمثال: `834033986 1`")
+            return
+        elif query.data == "adm_delete_user":
+            context.user_data["admin_action"] = "delete_user"
+            await query.message.reply_text("🗑️ أرسل `ID المستخدم` المراد مسحه تماماً من السيرفر وإلغاء بوتاته:")
+            return
+        elif query.data == "adm_get_ids":
+            try:
+                # محاولة جلب المستخدمين إذا كانت قاعدة البيانات تدعم جلب القائمة
+                if hasattr(db, "get_all_users"):
+                    users = db.get_all_users()
+                    user_list = "\n".join([f"👤 ID: `{u[0]}`" for u in users]) if users else "لا يوجد مستخدمين بعد."
+                else:
+                    total, active = db.get_stats()
+                    user_list = f"عدد الحسابات الكلي: {total}\n(جلب التفاصيل النصية بالـ ID يتطلب ربط دالة استعلام مخصصة)"
+                
+                text = f"🆔 **قائمة معرّفات مستخدمي البوت الرئيسي:**\n\n{user_list}"
+            except Exception as e:
+                text = f"❌ تعذر استخراج المعرفات نصياً: {e}"
+                
+            keyboard = [[InlineKeyboardButton("🔙 العودة للوحة الإدارة", callback_data="admin_panel")]]
+            await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
 
     if query.data == "main_menu":
