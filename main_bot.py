@@ -18,6 +18,25 @@ try:
 except Exception:
     ADMIN_ID = 0
 
+def get_correct_table_name():
+    """دالة ذكية لاكتشاف اسم الجدول الصحيح في قاعدة البيانات تلقائياً"""
+    try:
+        conn = sqlite3.connect("database.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+        conn.close()
+        # ترشيح الأسماء المتوقعة للجدول بناءً على الجداول الموجودة فعلياً
+        for t in tables:
+            name = t[0]
+            if name in ["bots", "users", "sub_bots", "telegram_bots", "bot_users"]:
+                return name
+        if tables:
+            return tables[0][0] # العودة بأول جدول متاح إذا لم يطابق المتوقع
+    except Exception:
+        pass
+    return "bots" # احتياطي في حال الفشل التام
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
@@ -38,6 +57,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # التحقق مما إذا كان المدخل نصاً موجهاً للإدارة
     if ADMIN_ID != 0 and user_id == ADMIN_ID and context.user_data.get("admin_action"):
         action = context.user_data.get("admin_action")
+        table_name = get_correct_table_name()
         
         if action == "add_days":
             try:
@@ -71,14 +91,14 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
                 
-                # تنفيذ أمر الحذف من قاعدة البيانات مباشرة لضمان المسح
+                # تنفيذ أمر الحذف الديناميكي من قاعدة البيانات
                 conn = sqlite3.connect("database.db")
                 cursor = conn.cursor()
-                cursor.execute("DELETE FROM bots WHERE user_id = ?", (target_id,))
+                cursor.execute(f"DELETE FROM {table_name} WHERE user_id = ?", (target_id,))
                 conn.commit()
                 conn.close()
                 
-                await update.message.reply_text(f"🗑️ تم حذف المستخدم `{target_id}` نهائياً من النظام وإيقاف خط السحب الخاص به.")
+                await update.message.reply_text(f"🗑️ تم حذف المستخدم `{target_id}` نهائياً من الجدول `{table_name}` وإيقاف خط السحب الخاص به.")
             except Exception as e:
                 await update.message.reply_text(f"❌ فشل تنفيذ الحذف. الخطأ: {e}")
             context.user_data.pop("admin_action", None)
@@ -211,10 +231,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         elif query.data == "adm_get_ids":
             try:
-                # قراءة المعرفات مباشرة من قاعدة البيانات وعرضها بدقة
+                table_name = get_correct_table_name()
                 conn = sqlite3.connect("database.db")
                 cursor = conn.cursor()
-                cursor.execute("SELECT user_id FROM bots")
+                
+                # جلب أول عمود يحتوي على المعرف ديناميكياً لتفادي أخطاء المسميات
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                columns = cursor.fetchall()
+                id_column = "user_id"
+                if columns:
+                    id_column = columns[0][1] # أخذ أول عمود كمعرف (غالبًا يكون الـ ID أو user_id)
+
+                cursor.execute(f"SELECT {id_column} FROM {table_name}")
                 rows = cursor.fetchall()
                 conn.close()
                 
@@ -223,9 +251,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     user_list = "لا يوجد مستخدمين مسجلين حالياً."
                 
-                text = f"🆔 **قائمة معرّفات مستخدمي البوت الرئيسي التفصيلية:**\n\n{user_list}"
+                text = f"🆔 **قائمة معرّفات مستخدمي النظام التفصيلية:**\n*(تم القراءة من جدول: `{table_name}`)*\n\n{user_list}"
             except Exception as e:
-                text = f"❌ تعذر استخراج المعرفات من جدول البيانات: {e}"
+                text = f"❌ تعذر استخراج المعرفات تلقائياً: {e}"
                 
             keyboard = [[InlineKeyboardButton("🔙 العودة للوحة الإدارة", callback_data="admin_panel")]]
             await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
@@ -264,9 +292,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_dashboard(update, user_id, user_name)
         
     elif query.data == "renew_subscription":
-        # حل مشكلة تجديد الاشتراك: يرسل للمستخدم رابطاً مباشراً لمالك البوت (الأدمن) للتجديد مع رقم تعريفه
-        bot_info = await context.bot.get_me()
-        admin_link = f"https://t.me/{bot_info.username}?start="  # أو ضع رابط حسابك الشخصي المباشر هنا t.me/username
         await query.message.reply_text(
             f"⚙️ **لتجديد اشتراكك الشهري:**\n\n"
             f"يرجى التواصل مع الإدارة مباشرة وتزويدهم بالمعرف الخاص بك لتفعيل باقتك:\n"
