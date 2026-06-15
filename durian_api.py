@@ -35,20 +35,20 @@ class DurianAPI:
                 response = await client.get(url, timeout=10)
                 if response.status_code == 200:
                     data = response.json()
-                    if data.get("code") == 200 and "data" in data:
-                        # الموقع يرجع قائمة بيانات أو نص مباشر يحتوي على الرقم ومعرف الطلب (Order ID)
-                        # سنعيد الرقم والمعرف لإدخالهما في دالة الفحص والإلغاء
+                    
+                    # حماية إضافية: التأكد من أن الاستجابة قاموس (dict) وليست نصاً مباشراً
+                    if isinstance(data, dict) and data.get("code") == 200 and "data" in data:
                         return {
                             "status": "success", 
                             "number": data["data"].get("mobile"), 
                             "order_id": data["data"].get("orderId") or data["data"].get("id")
                         }
                     else:
-                        return {"status": "error", "message": data.get("msg", "Unknown error")}
+                        msg = data.get("msg", "Unknown error") if isinstance(data, dict) else str(data)
+                        return {"status": "error", "message": msg}
         except Exception as e:
             logger.error(f"Error ordering number: {e}")
         return {"status": "error", "message": "Connection failed"}
-
     @staticmethod
     async def cancel_order(username: str, api_key: str, order_id: str) -> bool:
         """إلغاء الطلب وتحرير الرصيد في حال كان الرقم محظوراً أو تالفاً (تحديث تلقائي)"""
