@@ -1,73 +1,153 @@
-from telethon.errors import FloodWaitError
-from telethon.tl.functions.contacts import ImportContactsRequest
-from telethon.tl.types import InputPhoneContact
+import asyncio
 
-from telegram_checker.telegram_client import telegram_client_manager
-from telegram_checker.account_manager import account_manager
-from telegram_checker.flood_manager import flood_manager
+from telethon import functions
+from telethon import types
+from telethon.errors import (
+    FloodWaitError,
+    UserPrivacyRestrictedError,
+    PhoneNumberBannedError
+)
+
+from .telegram_client import TelegramClientManager
+from .account_manager import account_manager
+from .flood_manager import flood_manager
 
 
-async def check_phone(phone):
-    """
-    فحص رقم بواسطة Telegram.
+class TelegramChecker:
 
-    يرجع:
+    def __init__(self):
+        pass
 
-    {
-        "status":"NEW",
-        "text":"✅ جديد بدون جلسة"
-    }
+    async def _import_contact(
+        self,
+        client,
+        phone
+    ):
+        """
+        استيراد الرقم إلى جهات الاتصال.
+        """
 
-    أو
-
-    {
-        "status":"USED",
-        "text":"⚠️ عليه جلسة"
-    }
-
-    أو
-
-    {
-        "status":"BANNED",
-        "text":"🚫 محظور"
-    }
-    """
-
-    account = await account_manager.get_available_account()
-
-    if account is None:
-
-        raise Exception("لا يوجد أي حساب Telegram متاح للفحص.")
-
-    client = await telegram_client_manager.get_client(account)
-
-    try:
-
-        contact = InputPhoneContact(
+        contact = types.InputPhoneContact(
             client_id=0,
             phone=phone,
-            first_name="Check",
+            first_name="Checker",
             last_name=""
         )
 
         result = await client(
-            ImportContactsRequest([contact])
+            functions.contacts.ImportContactsRequest(
+                contacts=[contact]
+            )
         )
-
-        await flood_manager.account_used(account["id"])
-
-        # سنضيف تحليل النتيجة في الخطوة القادمة
 
         return result
 
-    except FloodWaitError as e:
+    async def _delete_contact(
+        self,
+        client,
+        user
+    ):
+        """
+        حذف جهة الاتصال بعد انتهاء الفحص.
+        """
 
-        await flood_manager.set_flood(
-            account["id"],
-            e.seconds
+        try:
+
+            await client(
+                functions.contacts.DeleteContactsRequest(
+                    id=[user]
+                )
+            )
+
+        except Exception:
+            pass
+
+async def check_phone(
+        self,
+        account,
+        phone
+    ):
+        """
+        فحص رقم واحد.
+        """
+
+        client = TelegramClientManager(
+            account["session"],
+            account["api_id"],
+            account["api_hash"]
         )
 
-        return await check_phone(phone)
+        await client.connect()
 
-    except Exception:
-        raise
+        try:
+
+            result = await self._import_contact(
+                client,
+                phone
+            )
+
+        except FloodWaitError as e:
+
+            flood_manager.set_flood(
+                account["id"],
+                e.seconds
+            )
+
+            await client.disconnect()
+
+            return {
+                "status": "FLOOD",
+                "seconds": e.seconds
+            }
+
+        except PhoneNumberBannedError:
+
+            await client.disconnect()
+
+            return {
+                "status": "BANNED"
+            }
+
+        except Exception as e:
+
+            await client.disconnect()
+
+            return {
+                "status": "ERROR",
+                "error": str(e)
+            }
+users = result.users
+
+        if not users:
+
+            await client.disconnect()
+
+            return {
+                "status": "NOT_REGISTERED",
+                "phone": phone
+            }
+
+        user = users[0]
+
+        info = {
+            "status": "REGISTERED",
+            "phone": phone,
+            "telegram_id": user.id,
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
+            "username": user.username or "",
+            "premium": getattr(user, "premium", False),
+            "scam": getattr(user, "scam", False),
+            "fake": getattr(user, "fake", False),
+            "bot": getattr(user, "bot", False),
+            "verified": getattr(user, "verified", False),
+        }
+
+        try:
+            await self._delete_contact(client, user)
+        except Exception:
+            pass
+
+        await client.disconnect()
+
+        return info
