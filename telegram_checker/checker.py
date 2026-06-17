@@ -1,244 +1,135 @@
 import asyncio
-
-from telethon import functions
-from telethon import types
+import os
+from telethon import functions, types
 from telethon.errors import (
-    FloodWaitError,
-    UserPrivacyRestrictedError,
-    PhoneNumberBannedError
+    FloodWaitError, 
+    UserPrivacyRestrictedError, 
+    PhoneNumberBannedError,
+    SessionPasswordNeededError,
+    PhoneNumberInvalidError
 )
-
 from .telegram_client import TelegramClientManager
 from .account_manager import account_manager
 from .flood_manager import flood_manager
 
-
 class TelegramChecker:
-
     def __init__(self):
         pass
 
-    async def _import_contact(
-        self,
-        client,
-        phone
-    ):
+    async def check_phone(self, account, phone):
         """
-        استيراد الرقم إلى جهات الاتصال.
+        فحص حالة الرقم والجلسة بدقة متناهية بناءً على رد سيرفر التلغرام الفوري.
         """
-
-        contact = types.InputPhoneContact(
-            client_id=0,
-            phone=phone,
-            first_name="Checker",
-            last_name=""
-        )
-
-        result = await client(
-            functions.contacts.ImportContactsRequest(
-                contacts=[contact]
-            )
-        )
-
-        return result
-
-    async def _delete_contact(
-        self,
-        client,
-        user
-    ):
-        """
-        حذف جهة الاتصال بعد انتهاء الفحص.
-        """
-
-        try:
-
-            await client(
-                functions.contacts.DeleteContactsRequest(
-                    id=[user]
-                )
-            )
-
-        except Exception:
-            pass
-
-async def check_phone(
-        self,
-        account,
-        phone
-    ):
-        """
-        فحص رقم واحد.
-        """
-
         client = TelegramClientManager(
             account["session"],
             account["api_id"],
             account["api_hash"]
         )
-
         await client.connect()
 
         try:
-
-            result = await self._import_contact(
-                client,
-                phone
-            )
-
-        except FloodWaitError as e:
-
-            flood_manager.set_flood(
-                account["id"],
-                e.seconds
-            )
-
+            # محاولة إرسال طلب الكود للرقم لمعرفة حالته وجلسته فوراً
+            await client.send_code_request(phone)
             await client.disconnect()
-
+            
+            # إذا مر السطر السابق بدون أخطاء، فالرقم مفتوح وجاهز تماماً بدون باسورد
             return {
-                "status": "FLOOD",
-                "seconds": e.seconds
+                "status": "NO_SESSION",
+                "phone": phone,
+                "status_text": "✅ الرقم بدون جلسة"
+            }
+
+        except SessionPasswordNeededError:
+            await client.disconnect()
+            # الرقم شغال وموجود ولكن صاحبه وضع كلمة سر التحقق بخطوتين
+            return {
+                "status": "HAS_SESSION",
+                "phone": phone,
+                "status_text": "⚠️ الرقم لديه جلسة"
             }
 
         except PhoneNumberBannedError:
-
             await client.disconnect()
-
+            # الرقم طار وتم حظره من شركة التلغرام تماماً
             return {
-                "status": "BANNED"
+                "status": "BANNED",
+                "phone": phone,
+                "status_text": "🚯 محظور"
             }
 
-        except Exception as e:
-
+        except PhoneNumberInvalidError:
             await client.disconnect()
-
             return {
-                "status": "ERROR",
-                "error": str(e)
+                "status": "INVALID",
+                "phone": phone,
+                "status_text": "⚠️ رقم غير صالح"
             }
-users = result.users
 
-        if not users:
-
+        except FloodWaitError as e:
+            # في حال واجه الحساب الفاحص حظر مؤقت (سبام) من كثرة الفحص
+            flood_manager.set_flood(account["id"], e.seconds)
             await client.disconnect()
-
             return {
-                "status": "NOT_REGISTERED",
+                "status": "FLOOD",
+                "seconds": e.seconds,
                 "phone": phone
             }
 
-        user = users[0]
+        except Exception as e:
+            await client.disconnect()
+            return {
+                "status": "ERROR",
+                "error": str(e),
+                "phone": phone,
+                "status_text": "⚪️ غير معروف / معلق"
+            }
 
-        info = {
-            "status": "REGISTERED",
-            "phone": phone,
-            "telegram_id": user.id,
-            "first_name": user.first_name or "",
-            "last_name": user.last_name or "",
-            "username": user.username or "",
-            "premium": getattr(user, "premium", False),
-            "scam": getattr(user, "scam", False),
-            "fake": getattr(user, "fake", False),
-            "bot": getattr(user, "bot", False),
-            "verified": getattr(user, "verified", False),
-        }
-
-        try:
-            await self._delete_contact(client, user)
-        except Exception:
-            pass
-
-        await client.disconnect()
-
-        return info
-
-async def get_available_account(self):
-        """
-        الحصول على أول حساب متاح للفحص.
-        """
-
+    async def get_available_account(self):
+        """ الحصول على أول حساب متاح للفحص. """
         accounts = account_manager.get_available_accounts()
-
         if not accounts:
             return None
-
         for account in accounts:
-
             if flood_manager.is_flooded(account["id"]):
                 continue
-
             return account
-
         return None
 
-async def wait_for_account(self):
-        """
-        الانتظار حتى يصبح هناك حساب متاح.
-        """
-
+    async def wait_for_account(self):
+        """ الانتظار حتى يصبح هناك حساب متاح. """
         while True:
-
             account = await self.get_available_account()
-
             if account:
                 return account
-
             await asyncio.sleep(5)
 
-async def check_numbers(
-        self,
-        phones,
-        callback=None
-    ):
-        """
-        فحص مجموعة أرقام.
-        """
-
+    async def check_numbers(self, phones, callback=None):
+        """ فحص مجموعة أرقام. """
         results = []
-
         for phone in phones:
-
             account = await self.wait_for_account()
-
-            result = await self.check_phone(
-                account,
-                phone
-            )
-
+            result = await self.check_phone(account, phone)
+            
             if result["status"] == "FLOOD":
                 continue
-
             if result["status"] == "BANNED":
                 account_manager.disable_account(account["id"])
                 continue
-
+                
             results.append(result)
-
             if callback:
                 await callback(result)
-
         return results
 
 class BatchChecker:
-
     def __init__(self, checker):
         self.checker = checker
 
-    async def worker(
-        self,
-        account,
-        queue,
-        callback=None
-    ):
-        """
-        عامل يستخدم حساب Telegram واحد.
-        """
-
+    async def worker(self, account, queue, callback=None):
+        """ عامل يستخدم حساب Telegram واحد لفحص الطابور بالتوازي. """
         while True:
-
             try:
                 phone = await queue.get()
-
             except asyncio.CancelledError:
                 break
 
@@ -246,72 +137,39 @@ class BatchChecker:
                 queue.task_done()
                 break
 
-            result = await self.checker.check_phone(
-                account,
-                phone
-            )
+            result = await self.checker.check_phone(account, phone)
 
             if result["status"] == "FLOOD":
-
-                flood_manager.set_flood(
-                    account["id"],
-                    result["seconds"]
-                )
-
+                flood_manager.set_flood(account["id"], result["seconds"])
                 queue.put_nowait(phone)
-
                 queue.task_done()
                 break
-
             elif result["status"] == "BANNED":
-
-                account_manager.disable_account(
-                    account["id"]
-                )
-
+                account_manager.disable_account(account["id"])
                 queue.put_nowait(phone)
-
                 queue.task_done()
                 break
 
             if callback:
                 await callback(result)
-
             queue.task_done()
 
-async def run(
-        self,
-        phones,
-        callback=None
-    ):
-        """
-        تشغيل الفحص المتوازي.
-        """
-
+    async def run(self, phones, callback=None):
+        """ تشغيل الفحص المتوازي الذكي. """
         queue = asyncio.Queue()
-
         for phone in phones:
             await queue.put(phone)
 
         accounts = account_manager.get_available_accounts()
-
         workers = []
 
         for account in accounts:
-
             if flood_manager.is_flooded(account["id"]):
                 continue
 
             task = asyncio.create_task(
-
-                self.worker(
-                    account,
-                    queue,
-                    callback
-                )
-
+                self.worker(account, queue, callback)
             )
-
             workers.append(task)
 
         await queue.join()
@@ -319,15 +177,8 @@ async def run(
         for _ in workers:
             await queue.put(None)
 
-        await asyncio.gather(
-            *workers,
-            return_exceptions=True
-        )
-
+        await asyncio.gather(*workers, return_exceptions=True)
         return True
 
 telegram_checker = TelegramChecker()
-
-batch_checker = BatchChecker(
-    telegram_checker
-)
+batch_checker = BatchChecker(telegram_checker)
