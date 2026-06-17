@@ -1,1 +1,1 @@
-
+await checker.check(phone)
