@@ -170,3 +170,164 @@ async def get_available_account(self):
             return account
 
         return None
+
+async def wait_for_account(self):
+        """
+        الانتظار حتى يصبح هناك حساب متاح.
+        """
+
+        while True:
+
+            account = await self.get_available_account()
+
+            if account:
+                return account
+
+            await asyncio.sleep(5)
+
+async def check_numbers(
+        self,
+        phones,
+        callback=None
+    ):
+        """
+        فحص مجموعة أرقام.
+        """
+
+        results = []
+
+        for phone in phones:
+
+            account = await self.wait_for_account()
+
+            result = await self.check_phone(
+                account,
+                phone
+            )
+
+            if result["status"] == "FLOOD":
+                continue
+
+            if result["status"] == "BANNED":
+                account_manager.disable_account(account["id"])
+                continue
+
+            results.append(result)
+
+            if callback:
+                await callback(result)
+
+        return results
+
+class BatchChecker:
+
+    def __init__(self, checker):
+        self.checker = checker
+
+    async def worker(
+        self,
+        account,
+        queue,
+        callback=None
+    ):
+        """
+        عامل يستخدم حساب Telegram واحد.
+        """
+
+        while True:
+
+            try:
+                phone = await queue.get()
+
+            except asyncio.CancelledError:
+                break
+
+            if phone is None:
+                queue.task_done()
+                break
+
+            result = await self.checker.check_phone(
+                account,
+                phone
+            )
+
+            if result["status"] == "FLOOD":
+
+                flood_manager.set_flood(
+                    account["id"],
+                    result["seconds"]
+                )
+
+                queue.put_nowait(phone)
+
+                queue.task_done()
+                break
+
+            elif result["status"] == "BANNED":
+
+                account_manager.disable_account(
+                    account["id"]
+                )
+
+                queue.put_nowait(phone)
+
+                queue.task_done()
+                break
+
+            if callback:
+                await callback(result)
+
+            queue.task_done()
+
+async def run(
+        self,
+        phones,
+        callback=None
+    ):
+        """
+        تشغيل الفحص المتوازي.
+        """
+
+        queue = asyncio.Queue()
+
+        for phone in phones:
+            await queue.put(phone)
+
+        accounts = account_manager.get_available_accounts()
+
+        workers = []
+
+        for account in accounts:
+
+            if flood_manager.is_flooded(account["id"]):
+                continue
+
+            task = asyncio.create_task(
+
+                self.worker(
+                    account,
+                    queue,
+                    callback
+                )
+
+            )
+
+            workers.append(task)
+
+        await queue.join()
+
+        for _ in workers:
+            await queue.put(None)
+
+        await asyncio.gather(
+            *workers,
+            return_exceptions=True
+        )
+
+        return True
+
+telegram_checker = TelegramChecker()
+
+batch_checker = BatchChecker(
+    telegram_checker
+)
