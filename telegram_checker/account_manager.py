@@ -1,15 +1,115 @@
+from database import get_connection
+
+
 class AccountManager:
+    def __init__(self):
+        pass
 
-    async def get_best_account()
+    async def get_all_accounts(self):
+        """
+        جلب جميع حسابات تيليجرام المفعلة.
+        """
+        conn = get_connection()
+        cur = conn.cursor()
 
-    async def mark_flood()
+        cur.execute("""
+            SELECT
+                id,
+                api_id,
+                api_hash,
+                session,
+                is_active,
+                flood_until
+            FROM telegram_accounts
+            WHERE is_active = TRUE
+            ORDER BY id ASC
+        """)
 
-    async def increase_checks()
+        rows = cur.fetchall()
 
-    async def disable_account()
+        cur.close()
+        conn.close()
 
-    async def get_all_accounts()
+        accounts = []
 
-    async def get_account()
+        for row in rows:
+            accounts.append({
+                "id": row[0],
+                "api_id": row[1],
+                "api_hash": row[2],
+                "session": row[3],
+                "is_active": row[4],
+                "flood_until": row[5]
+            })
 
-    async def refresh_accounts()
+        return accounts
+
+    async def get_available_account(self):
+        """
+        يرجع أول حساب صالح للاستخدام
+        (ليس معطل وليس داخل FloodWait).
+        """
+
+        accounts = await self.get_all_accounts()
+
+        if not accounts:
+            return None
+
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+
+        for account in accounts:
+
+            flood_until = account["flood_until"]
+
+            # إذا الحساب غير داخل FloodWait
+            if flood_until is None:
+                return account
+
+            # انتهى وقت الـ Flood
+            if flood_until <= now:
+                return account
+
+        return None
+
+    async def disable_account(self, account_id):
+        """
+        تعطيل الحساب.
+        """
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            UPDATE telegram_accounts
+            SET is_active = FALSE
+            WHERE id=%s
+        """, (account_id,))
+
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+    async def enable_account(self, account_id):
+        """
+        إعادة تفعيل الحساب.
+        """
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            UPDATE telegram_accounts
+            SET is_active = TRUE
+            WHERE id=%s
+        """, (account_id,))
+
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+
+account_manager = AccountManager()
