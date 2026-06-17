@@ -151,3 +151,22 @@ users = result.users
         await client.disconnect()
 
         return info
+
+async def get_available_account(self):
+        """
+        الحصول على أول حساب متاح للفحص.
+        """
+
+        accounts = account_manager.get_available_accounts()
+
+        if not accounts:
+            return None
+
+        for account in accounts:
+
+            if flood_manager.is_flooded(account["id"]):
+                continue
+
+            return account
+
+        return None
