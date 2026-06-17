@@ -112,6 +112,25 @@ def init_db():
     conn.commit()
 
 # 6. حسابات Telegram المستخدمة لفحص الأرقام
+cursor.execute("""
+        CREATE TABLE IF NOT EXISTS telegram_accounts (
+            id SERIAL PRIMARY KEY,
+            phone TEXT UNIQUE NOT NULL,
+            api_id INTEGER NOT NULL,
+            api_hash TEXT NOT NULL,
+            string_session TEXT NOT NULL,
+            status INTEGER DEFAULT 1,
+            flood_until TIMESTAMP NULL,
+            total_checks INTEGER DEFAULT 0,
+            last_used TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
 def save_bot(user_id, token):
     conn = get_connection()
     cursor = conn.cursor()
