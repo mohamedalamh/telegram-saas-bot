@@ -6,6 +6,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
+from telegram_checker.checker import check_phone
 
 COUNTRY_MAP = {
     "679": {"name": "فيجي", "emoji": "🇫🇯"},
@@ -321,7 +322,10 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
             
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
-                number_status = result.get("number_status", "✅ الرقم بدون جلسة")
+
+                check_result = await check_phone(phone_number)
+
+                number_status = check_result["text"]
                 
                 # 3. صياغة التنسيق الرائع والمطلوب المتوافق مع الصورة تماماً
                 message_text = (
