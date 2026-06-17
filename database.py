@@ -108,8 +108,8 @@ def init_db():
     ''')
     conn.commit()
     
-# 6. حسابات Telegram المستخدمة لفحص الأرقام
-cursor.execute("""
+    # 6. حسابات Telegram المستخدمة لفحص الأرقام
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS telegram_accounts (
             id SERIAL PRIMARY KEY,
             phone TEXT UNIQUE NOT NULL,
@@ -124,7 +124,7 @@ cursor.execute("""
         )
     """)
     conn.commit()
-
+ 
     cursor.close()
     conn.close()
 
