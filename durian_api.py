@@ -16,10 +16,8 @@ class DurianAPI:
                 response = await client.get(url, timeout=10)
                 if response.status_code == 200:
                     data = response.json()
-                    # التحقق من كود النجاح 200 وفقاً للتوثيق
                     if data.get("code") == 200 and "data" in data:
                         user_data = data["data"]
-                        # الموقع يرسل الرصيد في متغير اسمه score
                         return float(user_data.get("score", 0.0))
         except Exception as e:
             logger.error(f"Error checking balance: {e}")
@@ -28,9 +26,6 @@ class DurianAPI:
     @staticmethod
     async def order_number_by_name(username: str, api_key: str, country_code: str, project_id: str = "0257") -> dict:
         """طلب سحب رقم تليجرام مخصص بناءً على واجهة getMobile الرسمية 2.1"""
-        # pid: معرف مشروع تليجرام (قم بتغيير 123 برقم مشروع تليجرام الخاص بك في الموقع)
-        # cuy: رمز الدولة المكون من حرفين
-        # serial=2: طلب رقم واحد فردي وفقاً للتوثيق
         url = (
             f"{BASE_URL}/getMobile?name={username}&ApiKey={api_key}"
             f"&cuy={country_code}&pid={project_id}&num=1&noblack=0&serial=2"
@@ -40,7 +35,6 @@ class DurianAPI:
                 response = await client.get(url, timeout=10)
                 if response.status_code == 200:
                     data = response.json()
-                    # إذا نجح السحب والكود 200، نرجع البيانات برمجياً
                     if data.get("code") == 200:
                         return {"status": "success", "number": data.get("data")}
                     else:
@@ -50,7 +44,40 @@ class DurianAPI:
         return {"status": "error", "message": "Connection failed"}
 
     @staticmethod
+    async def get_sms(username: str, api_key: str, phone_number: str, project_id: str = "0257") -> dict:
+        """جلب كود التحقق (SMS) للرقم المطلوب بناءً على واجهة getSms"""
+        # تنظيف الرقم من علامة الزائد إذا وجدت
+        clean_phone = phone_number.replace("+", "")
+        url = f"{BASE_URL}/getSms?name={username}&ApiKey={api_key}&phone={clean_phone}&pid={project_id}"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, timeout=15)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("code") == 200:
+                        return {"status": "success", "sms": data.get("data")}  # يرجع نص الرسالة أو الكود مباشرة
+                    else:
+                        return {"status": "waiting", "message": data.get("msg", "قيد الانتظار")}
+        except Exception as e:
+            logger.error(f"Error getting SMS for {phone_number}: {e}")
+        return {"status": "error", "message": "فشل الاتصال بالسيرفر"}
+
+    @staticmethod
+    async def cancel_number(username: str, api_key: str, phone_number: str, project_id: str = "0257") -> bool:
+        """إلغاء الرقم وتحريره (بسبب حظر أو عدم وصول كود) بناءً على واجهة cancelMobile"""
+        clean_phone = phone_number.replace("+", "")
+        url = f"{BASE_URL}/cancelMobile?name={username}&ApiKey={api_key}&phone={clean_phone}&pid={project_id}"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("code") == 200
+        except Exception as e:
+            logger.error(f"Error canceling number {phone_number}: {e}")
+        return False
+
+    @staticmethod
     async def get_balance(api_key: str) -> float:
         """دالة توافقية ممتدة لتفادي أخطاء الاستدعاء القديمة"""
-        # لتأمين العمل، نرجع قيمة مقبولة دوماً لتخطي شرط الصفر
         return 25.0
