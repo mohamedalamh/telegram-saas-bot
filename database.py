@@ -316,3 +316,174 @@ def add_user_country(user_id, country_name):
     finally:
         cursor.close()
         conn.close()
+
+def save_telegram_account(phone, api_id, api_hash, string_session):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO telegram_accounts
+        (phone, api_id, api_hash, string_session)
+
+        VALUES (%s,%s,%s,%s)
+
+        ON CONFLICT (phone)
+
+        DO UPDATE SET
+
+        api_id=EXCLUDED.api_id,
+
+        api_hash=EXCLUDED.api_hash,
+
+        string_session=EXCLUDED.string_session,
+
+        status=1
+    """,(phone, api_id, api_hash, string_session))
+
+    conn.commit()
+
+    cursor.close()
+
+    conn.close()
+
+def get_telegram_accounts():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+        id,
+        phone,
+        api_id,
+        api_hash,
+        string_session,
+        status,
+        flood_until,
+        total_checks,
+        last_used
+
+        FROM telegram_accounts
+
+        ORDER BY id
+    """)
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+
+    conn.close()
+
+    return rows
+
+def delete_telegram_account(account_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM telegram_accounts WHERE id=%s",
+        (account_id,)
+    )
+
+    conn.commit()
+
+    cursor.close()
+
+    conn.close()
+
+def set_account_flood(account_id, flood_until):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+
+    UPDATE telegram_accounts
+
+    SET flood_until=%s
+
+    WHERE id=%s
+
+    """,(flood_until, account_id))
+
+    conn.commit()
+
+    cursor.close()
+
+    conn.close()
+
+def increase_account_checks(account_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+
+    UPDATE telegram_accounts
+
+    SET
+
+    total_checks=total_checks+1,
+
+    last_used=CURRENT_TIMESTAMP
+
+    WHERE id=%s
+
+    """,(account_id,))
+
+    conn.commit()
+
+    cursor.close()
+
+    conn.close()
+
+def get_best_telegram_account():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+
+    SELECT
+
+    id,
+
+    phone,
+
+    api_id,
+
+    api_hash,
+
+    string_session
+
+    FROM telegram_accounts
+
+    WHERE
+
+    status=1
+
+    AND
+
+    (
+
+    flood_until IS NULL
+
+    OR
+
+    flood_until<CURRENT_TIMESTAMP
+
+    )
+
+    ORDER BY
+
+    total_checks ASC,
+
+    last_used ASC NULLS FIRST
+
+    LIMIT 1
+
+    """)
+
+    row = cursor.fetchone()
+
+    cursor.close()
+
+    conn.close()
+
+    return row
