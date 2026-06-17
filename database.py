@@ -107,10 +107,7 @@ def init_db():
         )
     ''')
     conn.commit()
-
-    cursor.execute(...)
-    conn.commit()
-
+    
 # 6. حسابات Telegram المستخدمة لفحص الأرقام
 cursor.execute("""
         CREATE TABLE IF NOT EXISTS telegram_accounts (
