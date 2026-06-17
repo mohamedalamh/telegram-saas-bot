@@ -2,11 +2,8 @@ import asyncio
 import os
 from telethon import functions, types
 from telethon.errors import (
-    FloodWaitError, 
-    UserPrivacyRestrictedError, 
-    PhoneNumberBannedError,
-    SessionPasswordNeededError,
-    PhoneNumberInvalidError
+    FloodWaitError, UserPrivacyRestrictedError, PhoneNumberBannedError,
+    SessionPasswordNeededError, PhoneNumberInvalidError
 )
 from .telegram_client import TelegramClientManager
 from .account_manager import account_manager
@@ -17,28 +14,21 @@ class TelegramChecker:
         pass
 
     async def check_phone(self, account, phone):
-        """
-        فحص حالة الرقم والجلسة بدقة متناهية بناءً على رد سيرفر التلغرام الفوري.
-        """
+        """ فحص حالة الرقم والجلسة بدقة متناهية بناءً على رد سيرفر التلغرام الفوري. """
         client = TelegramClientManager(
-            account["session"],
-            account["api_id"],
-            account["api_hash"]
+            account["session"], account["api_id"], account["api_hash"]
         )
         await client.connect()
-
         try:
             # محاولة إرسال طلب الكود للرقم لمعرفة حالته وجلسته فوراً
             await client.send_code_request(phone)
             await client.disconnect()
-            
             # إذا مر السطر السابق بدون أخطاء، فالرقم مفتوح وجاهز تماماً بدون باسورد
             return {
                 "status": "NO_SESSION",
                 "phone": phone,
                 "status_text": "✅ الرقم بدون جلسة"
             }
-
         except SessionPasswordNeededError:
             await client.disconnect()
             # الرقم شغال وموجود ولكن صاحبه وضع كلمة سر التحقق بخطوتين
@@ -47,7 +37,6 @@ class TelegramChecker:
                 "phone": phone,
                 "status_text": "⚠️ الرقم لديه جلسة"
             }
-
         except PhoneNumberBannedError:
             await client.disconnect()
             # الرقم طار وتم حظره من شركة التلغرام تماماً
@@ -56,7 +45,6 @@ class TelegramChecker:
                 "phone": phone,
                 "status_text": "🚯 محظور"
             }
-
         except PhoneNumberInvalidError:
             await client.disconnect()
             return {
@@ -64,7 +52,6 @@ class TelegramChecker:
                 "phone": phone,
                 "status_text": "⚠️ رقم غير صالح"
             }
-
         except FloodWaitError as e:
             # في حال واجه الحساب الفاحص حظر مؤقت (سبام) من كثرة الفحص
             flood_manager.set_flood(account["id"], e.seconds)
@@ -74,7 +61,6 @@ class TelegramChecker:
                 "seconds": e.seconds,
                 "phone": phone
             }
-
         except Exception as e:
             await client.disconnect()
             return {
@@ -109,13 +95,11 @@ class TelegramChecker:
         for phone in phones:
             account = await self.wait_for_account()
             result = await self.check_phone(account, phone)
-            
             if result["status"] == "FLOOD":
                 continue
             if result["status"] == "BANNED":
                 account_manager.disable_account(account["id"])
                 continue
-                
             results.append(result)
             if callback:
                 await callback(result)
@@ -132,13 +116,11 @@ class BatchChecker:
                 phone = await queue.get()
             except asyncio.CancelledError:
                 break
-
             if phone is None:
                 queue.task_done()
                 break
-
+            
             result = await self.checker.check_phone(account, phone)
-
             if result["status"] == "FLOOD":
                 flood_manager.set_flood(account["id"], result["seconds"])
                 queue.put_nowait(phone)
@@ -149,7 +131,7 @@ class BatchChecker:
                 queue.put_nowait(phone)
                 queue.task_done()
                 break
-
+                
             if callback:
                 await callback(result)
             queue.task_done()
@@ -159,26 +141,23 @@ class BatchChecker:
         queue = asyncio.Queue()
         for phone in phones:
             await queue.put(phone)
-
+            
         accounts = account_manager.get_available_accounts()
         workers = []
-
         for account in accounts:
             if flood_manager.is_flooded(account["id"]):
                 continue
-
             task = asyncio.create_task(
                 self.worker(account, queue, callback)
             )
             workers.append(task)
-
+            
         await queue.join()
-
         for _ in workers:
             await queue.put(None)
-
         await asyncio.gather(*workers, return_exceptions=True)
         return True
 
+# بناء وإخراج الكائنات العامة للمشروع خارج الكلاسات (المسافات صفرية تماماً هنا)
 telegram_checker = TelegramChecker()
 batch_checker = BatchChecker(telegram_checker)
