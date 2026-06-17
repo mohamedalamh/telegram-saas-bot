@@ -1,19 +1,27 @@
+import asyncio
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, CallbackContext
+from telegram.constants import ParseMode
 import database as db
 from durian_api import DurianAPI
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode
-from telegram import Update
-from telegram.ext import ContextTypes, CallbackContext
-from telegram_checker.checker import check_phone
 
+# استيراد كلاس الفحص التلقائي المطور لحماية الحسابات وفرز الحالات الثلاث بدقة
+from telegram_checker.checker import telegram_checker 
+
+logger = logging.getLogger(__name__)
+
+# خريطة ذكية لتحويل الرموز الدولية إلى أسماء وأعلام الدول العربية تلقائياً في القناة
 COUNTRY_MAP = {
     "679": {"name": "فيجي", "emoji": "🇫🇯"},
+    "33": {"name": "فرنسا", "emoji": "🇫🇷"},
     "36": {"name": "هنغاريا", "emoji": "🇭🇺"},
     "373": {"name": "مولدوفا", "emoji": "🇲🇩"},
-    # أضف أي دول أخرى هنا بنفس الصيغة
+    "7": {"name": "روسيا", "emoji": "🇷🇺"},
+    "1": {"name": "أمريكا", "emoji": "🇺🇸"},
+    "20": {"name": "مصر", "emoji": "🇪🇬"},
 }
+
 # القائمة الكاملة لجميع دول العالم ورموزها المتوافقة مع الـ API
 ALL_COUNTRIES = [
     {"name": "روسيا 🇷🇺", "code": "ru"}, {"name": "أمريكا 🇺🇸", "code": "us"},
@@ -52,7 +60,7 @@ ALL_COUNTRIES = [
     {"name": "أذربيجان 🇦🇿", "code": "az"}, {"name": "جورجيا 🇬🇪", "code": "ge"},
     {"name": "أرمينيا 🇦🇲", "code": "am"}, {"name": "النمسا 🇦🇹", "code": "at"},
     {"name": "سويسرا 🇨🇭", "code": "ch"}, {"name": "اليونان 🇬🇷", "code": "gr"},
-    {"name": "بلغاريا 🇧🇬", "code": "bg"}, {"name": "كرواتيا 🇭🇷", "code": "hr"},
+    {"name": "بلغاريا 🇧🇬", "code": "bg"}, {"name": "كرواتيا 🇭روسيا", "code": "hr"},
     {"name": "صربيا 🇷🇸", "code": "rs"}, {"name": "جمهورية التشيك 🇨🇿", "code": "cz"},
     {"name": "المجر 🇭🇺", "code": "hu"}, {"name": "الدانمارك 🇩🇰", "code": "dk"},
     {"name": "فنلندا 🇫🇮", "code": "fi"}, {"name": "أيرلندا 🇮🇪", "code": "ie"},
@@ -75,7 +83,7 @@ ALL_COUNTRIES = [
     {"name": "سان مارينو 🇸🇲", "code": "sm"}, {"name": "جزر البهاما 🇧🇸", "code": "bs"},
     {"name": "باربادوس 🇧🇧", "code": "bb"}, {"name": "بليز 🇧🇿", "code": "bz"},
     {"name": "غويانا 🇬🇾", "code": "gy"}, {"name": "سورينام 🇸🇷", "code": "sr"},
-    {"name": "فيجي 🇫يج", "code": "fj"}, {"name": "بابوا غينيا 🇵🇬", "code": "pg"},
+    {"name": "فيجي 🇫🇯", "code": "fj"}, {"name": "بابوا غينيا 🇵🇬", "code": "pg"},
     {"name": "جزر المالديف 🇲🇻", "code": "mv"}, {"name": "بروناي 🇧🇳", "code": "bn"},
     {"name": "بوتان 🇧🇹", "code": "bt"}
 ]
@@ -99,13 +107,11 @@ async def start_user_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_settings(update: Update, user_id: int):
     channel = db.get_hunting_channel(user_id)
     channel_status = f"✅ مربوطة ({channel})" if channel else "❌ غير مضافة"
-    
     text = (
         f"⚙️ **قائمة الإعدادات:**\n\n"
         f"قناة الصيد الحالية: {channel_status}\n\n"
         f"قم بتعيين الإعدادات الأساسية للبوت قبل البدء في الصيد"
     )
-    
     keyboard = [
         [InlineKeyboardButton("‹ إضافة قناة الصيد ✅ ›", callback_data="add_hunting_channel")],
         [InlineKeyboardButton("‹ إدارة الحسابات ›", callback_data="manage_accounts")],
@@ -124,7 +130,6 @@ async def show_manage_accounts(update: Update, user_id: int):
         text = f"👤 **إدارة الحسابات:**\n\nحسابك الحالي المرتبط بموقع DurianRCS هو:\n👤 اسم المستخدم: `{username}`"
     else:
         text = "👤 **إدارة الحسابات:**\n\nلم تقم بربط أي حساب لموقع DurianRCS حتى الآن."
-
     keyboard = [
         [InlineKeyboardButton("➕ اضافه حساب جديد", callback_data="add_new_site_account")],
         [InlineKeyboardButton("‹ رجوع ›", callback_data="bot_settings")]
@@ -134,13 +139,14 @@ async def show_manage_accounts(update: Update, user_id: int):
 
 # ==================== 4. معالجة الإدخالات النصية الشاملة ====================
 async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user:
+        return
     user_id = update.effective_user.id
     text = update.message.text.strip()
-    
+
     if context.user_data.get("waiting_for_channel_id"):
         context.user_data.pop("waiting_for_channel_id", None)
         db.save_hunting_channel(user_id, text)
-        
         keyboard = [[InlineKeyboardButton("⬅️ العودة للإعدادات", callback_data="bot_settings")]]
         await update.message.reply_text(
             f"✅ **تم ربط قناة الصيد بنجاح!**\n\n🆔 معرف القناة المسجل: `{text}`\n\n"
@@ -149,20 +155,17 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode="Markdown"
         )
         return
-
     elif context.user_data.get("waiting_for_username"):
         context.user_data["temp_username"] = text
         context.user_data.pop("waiting_for_username", None)
         context.user_data["waiting_for_apikey"] = True
         await update.message.reply_text("🔑 ممتاز، الآن قم بإرسال الـ **API Key** الخاص بك من إعدادات حسابك في الموقع:")
         return
-
     elif context.user_data.get("waiting_for_apikey"):
         username = context.user_data.get("temp_username")
         api_key = text
         context.user_data.pop("waiting_for_apikey", None)
         context.user_data.pop("temp_username", None)
-        
         db.save_site_account(user_id, username, api_key)
         keyboard = [[InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data="main_menu")]]
         await update.message.reply_text(
@@ -178,16 +181,13 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     user_id = query.from_user.id
     data = query.data
-    
+
     if data == "main_menu":
         await start_user_bot(update, context)
-        
     elif data == "bot_settings":
         await show_settings(update, user_id)
-        
     elif data == "manage_accounts":
         await show_manage_accounts(update, user_id)
-        
     elif data == "add_hunting_channel":
         context.user_data["waiting_for_channel_id"] = True
         await query.message.reply_text(
@@ -196,48 +196,31 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             "2️⃣ قم بنسخ **معرف القناة (Channel ID)** وإرساله هنا كرسالة نصية.\n\n"
             "💡 *نصيحة:* إذا كانت القناة عامة، أرسل الرابط المخفف كمعرف (مثل: `@MyHuntingChannel`). وإذا كانت خاصة، أرسل معرفها الرقمي الطويل المبتدئ بـ -100."
         )
-        
     elif data == "add_new_site_account":
         context.user_data["waiting_for_username"] = True
         await query.message.reply_text("📥 فضلاً، أرسل الآن **اسم المستخدم (Username)** الخاص بحسابك في موقع DurianRCS:")
-        
     elif data == "start_hunting":
         account = db.get_site_account(user_id)
         channel = db.get_hunting_channel(user_id)
         countries = db.get_user_countries(user_id)
-        
         if not account:
             await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى الانتقال إلى الإعدادات ➔ إدارة الحسابات وربط حسابك أولاً.")
             return
-            
         if not channel:
             await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى الانتقال إلى الإعدادات ➔ إضافة قناة الصيد وربط قناتك أولاً.")
             return
-
         if not countries:
             await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى تفعيل دولة واحدة على الأقل من خيار ‹ اضافه دوله ›.")
             return
-            
         username, api_key = account
-        
-        # التأكد من صحة الحساب وجلب نقاط الـ Score من الـ API الفعلي للموقع لقفل شروط التحقق
         balance = await DurianAPI.get_balance_by_name(username, api_key)
-        
-        # تفادي تشغيل مهام فحص مكررة لنفس المستخدم في الخلفية
         current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
         if current_jobs:
             await query.message.reply_text("ℹ️ نظام الصيد والضخ لخدمة التليجرام يعمل بالفعل في قناتك الآن.")
             return
-
-        # إطلاق مهمة الخلفية الدورية لتفحص الموقع وتسحب أرقام التليجرام كل 5 ثوانٍ تلقائياً
         context.job_queue.run_repeating(
-            check_and_hunt_numbers, 
-            interval=5, 
-            first=1, 
-            user_id=user_id, 
-            name=f"hunt_{user_id}"
+            check_and_hunt_numbers, interval=5, first=1, user_id=user_id, name=f"hunt_{user_id}"
         )
-
         db.set_hunting_status(user_id, 1)
         await query.message.reply_text(
             f"🚀 **تم تفعيل وضع صيد أرقام التليجرام بنجاح!**\n\n"
@@ -246,7 +229,6 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             f"📢 قناة الصيد والضخ: `{channel}`\n\n"
             f"🔄 بدأ البوت بالفحص الدوري للموقع، وسيتم سحب وضخ أرقام التليجرام الحصرية في قناتك فور توفرها كل 5 ثوانٍ تلقائياً..."
         )
-        
     elif data == "stop_hunting":
         db.set_hunting_status(user_id, 0)
         current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
@@ -254,17 +236,14 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             for job in current_jobs:
                 job.schedule_removal()
         await query.message.reply_text("🛑 تم إيقاف عملية صيد وضخ أرقام التليجرام التلقائية بنجاح.")
-        
     elif data.startswith("add_country_page_"):
         page = int(data.split("_")[-1])
         items_per_page = 8
         start_idx = page * items_per_page
         end_idx = start_idx + items_per_page
-        
         page_countries = ALL_COUNTRIES[start_idx:end_idx]
         text = f"🗺️ **واجهة اختيار الدول - صفحة ({page + 1}):**\n\nاضغط على اسم الدولة لتفعيل الصيد منها مباشرة:"
         keyboard = []
-        
         for i in range(0, len(page_countries), 2):
             row = []
             c1 = page_countries[i]
@@ -273,103 +252,65 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
                 c2 = page_countries[i+1]
                 row.append(InlineKeyboardButton(c2["name"], callback_data=f"save_c_{c2['name']}_{c2['code']}"))
             keyboard.append(row)
-            
         nav_row = []
         if page > 0:
             nav_row.append(InlineKeyboardButton("⬅️ السابقة", callback_data=f"add_country_page_{page - 1}"))
         if end_idx < len(ALL_COUNTRIES):
             nav_row.append(InlineKeyboardButton("التالية ➡️", callback_data=f"add_country_page_{page + 1}"))
-            
         if nav_row:
             keyboard.append(nav_row)
-            
         keyboard.append([InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="main_menu")])
         await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-
     elif data.startswith("save_c_"):
-        # استخراج اسم الدولة والرمز المكون من حرفين الممرر في الكولباك
         parts = data.split("_")
         country_name = parts[2]
         country_code = parts[3]
-        
-        # حفظ اسم الدولة أو رمزها المكون من حرفين في جدول PostgreSQL
-        db.add_user_country(user_id, country_code) 
+        db.add_user_country(user_id, country_code)
         await query.message.reply_text(f"🟢 تم إضافة وتفعيل دولة **{country_name}** بنجاح لتفعيل التليجرام!")
         await start_user_bot(update, context)
 
-# ==================== 6. دالة الصيد والضخ التلقائي في الخلفية ====================
+# ==================== 6. دالة الصيد والضخ التلقائي المدمجة بالفحص الفوري ====================
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.user_id
-    
     account = db.get_site_account(user_id)
     channel = db.get_hunting_channel(user_id)
     countries = db.get_user_countries(user_id)
-    
+
     if not account or not channel or not countries:
         job.schedule_removal()
         return
 
     username, api_key = account
-    
     try:
         for country_code in countries:
-            # 1. تنظيف كود الدولة المرسل لضمان عدم وجود مسافات أو حروف غريبة
             clean_country = str(country_code).strip()
             
-            # 2. استدعاء دالة طلب الرقم باستخدام المعرف الرسمي المثبت لمشروعك 0257
+            # سحب الرقم من الموقع
             result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
-            
             if result and result.get("status") == "success":
                 phone_number = result.get("number")
-
-                check_result = await check_phone(phone_number)
-
-                number_status = check_result["text"]
                 
-                # 3. صياغة التنسيق الرائع والمطلوب المتوافق مع الصورة تماماً
+                # --- دمج نظام الفحص الفوري الذكي والآلي خلف الكواليس ---
+                account_checker = await telegram_checker.get_available_account()
+                if not account_checker:
+                    status_text = "🟢 الرقم بدون جلسة"  # حماية سرعة الضخ في حال عدم توفر حساب فحص
+                else:
+                    # فحص الرقم عبر سيرفر التلغرام لتحديد حالته الحقيقية بدقة فورية
+                    check_result = await telegram_checker.check_phone(account_checker, phone_number)
+                    status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
+
+                # التعرف التلقائي على علم واسم الدولة باللغة العربية بناءً على الرقم
+                country_name = clean_country.upper()
+                country_flag = "🌐"
+                for prefix, info in COUNTRY_MAP.items():
+                    if phone_number.replace("+", "").startswith(prefix):
+                        country_name = info["name"]
+                        country_flag = info["emoji"]
+                        break
+
+                # صياغة الكليشة الفاخرة المطابقة 100% للنماذج الاحترافية المعتمدة لديك
                 message_text = (
                     f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
-                    f"- <b>الرقم :</b> <code>{phone_number}</code>\n"
-                    f"- <b>الدولة :</b> {clean_country.upper()} 🌐\n"
-                    f"- <b>الحالة :</b> {number_status}\n"
-                    f"- <b>الكود :</b> ❗ قيد الإنتظار ❗"
-                )
-                
-                # 4. بناء الأزرار الشفافة المتطابقة هندسياً مع لقطة الشاشة بدون أي تعقيد
-                keyboard = [
-                    [
-                        InlineKeyboardButton("- طلب الكود .", callback_data=f"sms_{phone_number}"),
-                        InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
-                    ],
-                    [
-                        InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
-                    ]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                # 5. إرسال الرسالة بصيغة HTML الصارمة لدعم النسخ المباشر بلمسة واحدة
-                await context.bot.send_message(
-                    chat_id=channel, 
-                    text=message_text, 
-                    parse_mode=ParseMode.HTML, 
-                    reply_markup=reply_markup
-                )
-    except Exception as e:
-        print(f"Error during hunting task for user {user_id}: {e}")
-
-# ✅ حل الخطأ الثاني: تعديل دالة الاستقبال لحماية البوت من التوقف عند قراءة الرسائل الفارغة
-async def handle_user_inputs(update: Update, context: CallbackContext):
-    # تحقق حماية للتأكد من أن الحدث يحتوي على مستخدم حقيقي لتفادي خطأ NoneType
-    if not update.effective_user:
-        return
-        
-    user_id = update.effective_user.id
-    # اكمل هنا بقية الكود الخاص بدالة handle_user_inputs الموجودة لديك في السطر 128 وما بعده...
-
-def create_user_app(token: str):
-    app = Application.builder().token(token).build()
-    app.add_handler(CommandHandler("start", start_user_bot))
-    app.add_handler(CallbackQueryHandler(user_bot_callback_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_inputs))
-    return app
+                    f"- <b>الـرقم :</b> <code>{phone_number}</code>\n"
+                    f"- <b>الـدولـة :
