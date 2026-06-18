@@ -268,10 +268,17 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
 async def hunt_per_country(context, user_id, username, api_key, channel, country_code):
     """مهمة فرعية لصيد الأرقام لدولة محددة لضمان التوازي"""
     try:
-        clean_country = str(country_code).strip()
-        logger.info(f"[TRACE] hunt_per_country ENTERED for UserID={user_id}, Country={clean_country}")
+        # جلب الكود الرقمي الصحيح بناءً على القيمة المخزنة (سواء كانت كوداً أو اسماً قديماً)
+        # هذا يضمن أننا نرسل الكود الصحيح لـ Durian API
+        numeric_code = country_code
+        for c in ALL_COUNTRIES:
+            if c["code"] == country_code or c["name"] == country_code:
+                numeric_code = c["code"]
+                break
         
-        result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
+        logger.info(f"[TRACE] hunt_per_country ENTERED for UserID={user_id}, Country={country_code}, NumericCode={numeric_code}")
+        
+        result = await DurianAPI.order_number_by_name(username, api_key, numeric_code, project_id="0257")
         
         if result and result.get("status") == "success":
             phone_number = result.get("number")
@@ -287,12 +294,12 @@ async def hunt_per_country(context, user_id, username, api_key, channel, country
                 status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
                 logger.info(f"[TRACE] hunt_per_country Check Finished. Status: {status_text}")
 
-            country_name = clean_country.upper()
+            country_name = "غير معروف"
             country_flag = "🌐"
-            for prefix, info in COUNTRY_MAP.items():
-                if phone_number.replace("+", "").startswith(prefix):
-                    country_name = info["name"]
-                    country_flag = info["emoji"]
+            for c in ALL_COUNTRIES:
+                if c["code"] == numeric_code:
+                    country_name = c["name"]
+                    country_flag = "🚩"
                     break
 
             message_text = (
