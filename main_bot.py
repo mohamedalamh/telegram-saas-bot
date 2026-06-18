@@ -203,21 +203,7 @@ async def show_admin_panel(update: Update):
         await update.message.reply_text(text, reply_markup=reply_markup)
 
 # 🚀 الدالة المضافة حديثاً للإجبار وتخطي كاش أزرار التليجرام العالقة
-async def force_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """أمر مباشر يستدعي واجهة ربط الحساب الفاحص رغماً عن تضارب القوائم"""
-    user_id = update.effective_user.id
-    if ADMIN_ID == 0 or user_id != ADMIN_ID:
-        return ConversationHandler.END
-        
-    msg_text = (
-        "🚀 **نظام ربط حساب الفحص التلقائي (الوضع المباشر)**\n\n"
-        "أرسل بيانات الحساب الفاحص بالصيغة التالية تماماً:\n"
-        "`الرقم,api_id,api_hash`\n\n"
-        "مثال:\n"
-        "`+967777777777,28412234,b3a6c98ea...`"
-    )
-    await update.message.reply_text(msg_text, parse_mode="Markdown")
-    return PHONE
+gisin19421@ocuser.com
 
 # دالات استقبال وإعداد ربط الحساب الفاحص من شات البوت (تدار من الهاتف)
 async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
