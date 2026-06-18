@@ -306,11 +306,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["admin_action"] = "delete_user"
             await query.message.reply_text("🗑️ أرسل `ID المستخدم` المراد مسحه تماماً من السيرفر وإلغاء بوتاته:")
             return
-        elif query.data == "adm_add_checker":
-            logger.info("[TRACE] Callback received: adm_add_checker")
-            # إزالة الاستدعاء المباشر للدالة للسماح لـ ConversationHandler بالعمل
-            # سيتم التقاط الـ Callback بواسطة CallbackQueryHandler المدمج في checker_conv
-            return 
         elif query.data == "adm_get_ids":
             try:
                 table_name = get_correct_table_name()
@@ -388,8 +383,8 @@ async def main():
     # محادثة إضافة الحساب الفاحص لتفادي تداخل النصوص مع توكن البوت العادي
     checker_conv = ConversationHandler(
         entry_points=[
-            CommandHandler("add_checker", force_add_checker), # استخدام الدالة المباشرة هنا للإجبار
-            CallbackQueryHandler(button_handler, pattern="^adm_add_checker$")
+            CommandHandler("add_checker", force_add_checker),
+            CallbackQueryHandler(start_add_checker, pattern="^adm_add_checker$")
         ],
         states={
             PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone_and_send)],
