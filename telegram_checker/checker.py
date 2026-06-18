@@ -69,7 +69,13 @@ class TelegramChecker:
 
     async def get_available_account(self):
         """ الحصول على أول حساب متاح للفحص. """
-        accounts = account_manager.get_available_accounts()
+        try:
+            logger.info(f"[DEBUG] AccountManager attributes: {dir(account_manager)}")
+            accounts = await account_manager.get_available_accounts()
+        except AttributeError as e:
+            logger.error(f"[ERROR] AccountManager has no attribute! Dir: {dir(account_manager)}")
+            raise e
+            
         if not accounts:
             return None
         for account in accounts:
@@ -139,7 +145,7 @@ class BatchChecker:
         for phone in phones:
             await queue.put(phone)
             
-        accounts = account_manager.get_available_accounts()
+        accounts = await account_manager.get_available_accounts()
         workers = []
         for account in accounts:
             if flood_manager.is_flooded(account["id"]):

@@ -199,10 +199,10 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         for i in range(0, len(page_countries), 2):
             row = []
             c1 = page_countries[i]
-            row.append(InlineKeyboardButton(c1["name"], callback_data=f"save_c_{c1['name']}_{c1['code']}"))
+            row.append(InlineKeyboardButton(c1["name"], callback_data=f"save_c|{c1['name']}|{c1['code']}"))
             if i + 1 < len(page_countries):
                 c2 = page_countries[i+1]
-                row.append(InlineKeyboardButton(c2["name"], callback_data=f"save_c_{c2['name']}_{c2['code']}"))
+                row.append(InlineKeyboardButton(c2["name"], callback_data=f"save_c|{c2['name']}|{c2['code']}"))
             keyboard.append(row)
         nav_row = []
         if page > 0:
@@ -213,10 +213,8 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             keyboard.append(nav_row)
         keyboard.append([InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="main_menu")])
         await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-    elif data.startswith("save_c_"):
-        parts = data.split("_")
-        country_name = parts[2]
-        country_code = parts[3]
+    elif data.startswith("save_c|"):
+        _, country_name, country_code = data.split("|")
         db.add_user_country(user_id, country_code)
         await query.message.reply_text(f"🟢 تم إضافة وتفعيل دولة **{country_name}** بنجاح لتفعيل التليجرام!")
         await start_user_bot(update, context)
