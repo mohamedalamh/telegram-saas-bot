@@ -318,6 +318,17 @@ def add_user_country(user_id, country_name):
         cursor.close()
         conn.close()
 
+def get_account_flood(account_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT flood_until FROM telegram_accounts WHERE id=%s", (account_id,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        cursor.close()
+        conn.close()
+
 def save_telegram_account(phone, api_id, api_hash, string_session):
     conn = get_connection()
     cursor = conn.cursor()
