@@ -1,17 +1,11 @@
-from telegram_checker import TelegramChecker
-import os
-
-checker = TelegramChecker(
-    api_id=int(os.getenv("API_ID")),
-    api_hash=os.getenv("API_HASH")
-)
+from telegram_checker.checker import telegram_checker
+import asyncio
 
 async def check_phone(phone):
-    result = await checker.check(phone)
-
-    if result["status"] == "banned":
-        return "❌ محظور"
-    elif result["status"] == "used":
-        return "⚠️ مستخدم / لديه جلسة"
-    else:
-        return "✅ جديد"
+    # الحصول على حساب فحص متاح
+    account = await telegram_checker.get_available_account()
+    if not account:
+        return "⚪️ لا يوجد حساب فحص متاح"
+        
+    result = await telegram_checker.check_phone(account, phone)
+    return result.get("status_text", "⚪️ غير معروف")

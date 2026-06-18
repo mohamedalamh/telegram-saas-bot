@@ -78,6 +78,6 @@ class DurianAPI:
         return False
 
     @staticmethod
-    async def get_balance(api_key: str) -> float:
-        """دالة توافقية ممتدة لتفادي أخطاء الاستدعاء القديمة"""
-        return 25.0
+    async def get_balance(username: str, api_key: str) -> float:
+        """جلب رصيد الحساب الحقيقي من واجهة البرمجة"""
+        return await DurianAPI.get_balance_by_name(username, api_key)

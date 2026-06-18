@@ -315,6 +315,62 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             await query.answer("🧌 تم تصنيف جودة هذا النطاق كـ (ضعيفة) مؤقتاً بناءً على تقارير السحب.", show_alert=True)
 
 # ==================== 6. دالة الصيد والضخ التلقائي في الخلفية المدمجة بالفحص المطور الفوري ====================
+async def hunt_per_country(context, user_id, username, api_key, channel, country_code):
+    """مهمة فرعية لصيد الأرقام لدولة محددة لضمان التوازي"""
+    try:
+        clean_country = str(country_code).strip()
+        result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
+        if result and result.get("status") == "success":
+            phone_number = result.get("number")
+            
+            account_checker = await telegram_checker.get_available_account()
+            if not account_checker:
+                status_text = "🟢 الرقم بدون جلسة"
+            else:
+                check_result = await telegram_checker.check_phone(account_checker, phone_number)
+                status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
+
+            country_name = clean_country.upper()
+            country_flag = "🌐"
+            for prefix, info in COUNTRY_MAP.items():
+                if phone_number.replace("+", "").startswith(prefix):
+                    country_name = info["name"]
+                    country_flag = info["emoji"]
+                    break
+
+            message_text = (
+                f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
+                f"- <b>الـرقم :</b> <code>{phone_number}</code>\n"
+                f"- <b>الـدولـة :</b> {country_name} {country_flag}\n"
+                f"- <b>الـحـالـة :</b> {status_text}\n"
+                f"- <b>تكرار نزول الرقم :</b> 1 مرة\n"
+                f"- <b>الـكـود :</b> ❗ قيد الإنتظار ❗"
+            )
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{phone_number}"),
+                    InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{phone_number}")
+                ],
+                [
+                    InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{phone_number}"),
+                    InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
+                ],
+                [
+                    InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await context.bot.send_message(
+                chat_id=channel,
+                text=message_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=reply_markup
+            )
+    except Exception as e:
+        logger.error(f"Error hunting for user {user_id} in country {country_code}: {e}")
+
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.user_id
@@ -327,68 +383,9 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
         return
 
     username, api_key = account
-    try:
-        for country_code in countries:
-            clean_country = str(country_code).strip()
-            
-            # سحب الرقم من الموقع
-            result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
-            if result and result.get("status") == "success":
-                phone_number = result.get("number")
-                
-                # --- دمج نظام الفحص الفوري التلقائي خلف الكواليس لتحديد حالة الحساب بدقة قبل الإرسال للقناة ---
-                account_checker = await telegram_checker.get_available_account()
-                if not account_checker:
-                    status_text = "🟢 الرقم بدون جلسة"  # حماية لسرعة الضخ في حال عدم توفر حساب فحص
-                else:
-                    # فحص الرقم عبر خوادم التلغرام لتحديد حالته الحقيقية فوراً
-                    check_result = await telegram_checker.check_phone(account_checker, phone_number)
-                    status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
-
-                # التعرف التلقائي على علم واسم الدولة باللغة العربية بناءً على مقدمة الرقم الدولي
-                country_name = clean_country.upper()
-                country_flag = "🌐"
-                for prefix, info in COUNTRY_MAP.items():
-                    if phone_number.replace("+", "").startswith(prefix):
-                        country_name = info["name"]
-                        country_flag = info["emoji"]
-                        break
-
-                # صياغة الكليشة الاحترافية الفاخرة المطابقة 100% للنماذج والصور
-                message_text = (
-                    f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
-                    f"- <b>الـرقم :</b> <code>{phone_number}</code>\n"
-                    f"- <b>الـدولـة :</b> {country_name} {country_flag}\n"
-                    f"- <b>الـحـالـة :</b> {status_text}\n"
-                    f"- <b>تكرار نزول الرقم :</b> 1 مرة\n"
-                    f"- <b>الـكـود :</b> ❗ قيد الإنتظار ❗"
-                )
-
-                # الأزرار الخمسة الشفافة المتناسقة هندسياً لتمكين التحكم الكامل بالرقم من القناة مباشرة
-                keyboard = [
-                    [
-                        InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{phone_number}"),
-                        InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{phone_number}")
-                    ],
-                    [
-                        InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{phone_number}"),
-                        InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
-                    ],
-                    [
-                        InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
-                    ]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-
-                # ضخ المنشور فوراً في قناة المستخدم بصيغة HTML الصارمة لتسهيل النسخ السريع بلمسة واحدة
-                await context.bot.send_message(
-                    chat_id=channel,
-                    text=message_text,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=reply_markup
-                )
-    except Exception as e:
-        print(f"Error during hunting task for user {user_id}: {e}")
+    # تنفيذ الصيد لكل الدول المحددة في وقت واحد لضمان السرعة القصوى
+    tasks = [hunt_per_country(context, user_id, username, api_key, channel, c) for c in countries]
+    await asyncio.gather(*tasks)
 
 def create_user_app(token: str):
     app = Application.builder().token(token).build()

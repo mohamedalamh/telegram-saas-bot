@@ -58,17 +58,18 @@ def init_db():
     ''')
     conn.commit()
 
-    try:
+    # فحص وإضافة الأعمدة الناقصة بطريقة احترافية
+    def column_exists(table, column):
+        cursor.execute(f"SELECT COUNT(*) FROM information_schema.columns WHERE table_name='{table}' AND column_name='{column}'")
+        return cursor.fetchone()[0] > 0
+
+    if not column_exists('user_bots', 'expires_at'):
         cursor.execute("ALTER TABLE user_bots ADD COLUMN expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '30 days'")
         conn.commit()
-    except Exception:
-        conn.rollback()
 
-    try:
+    if not column_exists('user_bots', 'is_banned'):
         cursor.execute("ALTER TABLE user_bots ADD COLUMN is_banned INTEGER DEFAULT 0")
         conn.commit()
-    except Exception:
-        conn.rollback()
 
     # 2. إنشاء جدول ربط الحسابات لموقع DurianRCS
     cursor.execute('''
@@ -120,10 +121,15 @@ def init_db():
             flood_until TIMESTAMP NULL,
             total_checks INTEGER DEFAULT 0,
             last_used TIMESTAMP NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT TRUE
         )
     """)
     conn.commit()
+    
+    if not column_exists('telegram_accounts', 'is_active'):
+        cursor.execute("ALTER TABLE telegram_accounts ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
+        conn.commit()
  
     cursor.close()
     conn.close()
