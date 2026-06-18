@@ -218,6 +218,7 @@ async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_phone_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+    logger.info(f"[TRACE] get_phone_and_send RECEIVED: {text}")
     try:
         phone, api_id, api_hash = text.split(",")
         context.user_data["chk_phone"] = phone.strip()
@@ -387,10 +388,19 @@ async def main():
         per_message=False
     )
     
+    # تسجيل المحادثة الخاص بإضافة الحساب الفاحص
     main_app.add_handler(checker_conv)
+
+    # معالجات الأوامر
     main_app.add_handler(CommandHandler("start", start))
     main_app.add_handler(CommandHandler("admin", admin_command))
-    main_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_token))
+    
+    # معالج الرسائل العام مع سجل تتبع
+    async def debug_handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.info(f"[TRACE] handle_token RECEIVED message: '{update.message.text}'")
+        return await handle_token(update, context)
+
+    main_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, debug_handle_token))
     main_app.add_handler(CallbackQueryHandler(button_handler))
     
     await main_app.initialize()
