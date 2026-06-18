@@ -87,6 +87,10 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     # معالجة استقبال التوكن الجديد وحفظه للمستخدم العادي بشكل طبيعي
+    # منع معالجة الرسائل التي تحتوي على فاصلة لتجنب تداخل بيانات الحساب الفاحص
+    if "," in text:
+        return
+        
     status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل وحفظه...")
     is_valid = await bot_manager.validate_token(text)
     if not is_valid:
