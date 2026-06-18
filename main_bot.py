@@ -295,9 +295,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("🗑️ أرسل `ID المستخدم` المراد مسحه تماماً من السيرفر وإلغاء بوتاته:")
             return
         elif query.data == "adm_add_checker":
-            # إجبار الدخول في المحادثة مباشرة
-            await start_add_checker(update, context)
-            return
+            logger.info("[TRACE] Callback received: adm_add_checker")
+            # إزالة الاستدعاء المباشر للدالة للسماح لـ ConversationHandler بالعمل
+            # سيتم التقاط الـ Callback بواسطة CallbackQueryHandler المدمج في checker_conv
+            return 
         elif query.data == "adm_get_ids":
             try:
                 table_name = get_correct_table_name()
