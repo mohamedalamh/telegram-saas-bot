@@ -135,7 +135,7 @@ async def receive_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user.id
     code = update.message.text.strip()
     try:
-        result = await login_manager.login(
+        result = await login_manager.verify_code(
             phone=user_data[user]["phone"],
             code=code
         )
@@ -155,9 +155,8 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user.id
     password = update.message.text.strip()
     try:
-        result = await login_manager.login(
+        result = await login_manager.verify_password(
             phone=user_data[user]["phone"],
-            code="",
             password=password
         )
     except Exception as e:
