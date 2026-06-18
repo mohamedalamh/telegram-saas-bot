@@ -1,1 +1,1 @@
-worker: python run_checker.py
+worker: python main_bot.py
