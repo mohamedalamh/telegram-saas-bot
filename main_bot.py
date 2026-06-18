@@ -87,8 +87,9 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     # معالجة استقبال التوكن الجديد وحفظه للمستخدم العادي بشكل طبيعي
-    # منع معالجة الرسائل التي تحتوي على فاصلة لتجنب تداخل بيانات الحساب الفاحص
-    if "," in text:
+    # منع معالجة الرسائل التي تحتوي على فاصلة أو تبدأ بـ + لتجنب تداخل بيانات الحساب الفاحص
+    if "," in text or text.startswith("+"):
+        logger.info(f"[TRACE] handle_token IGNORING message due to format: '{text}'")
         return
         
     status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل وحفظه...")
@@ -299,8 +300,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("🗑️ أرسل `ID المستخدم` المراد مسحه تماماً من السيرفر وإلغاء بوتاته:")
             return
         elif query.data == "adm_add_checker":
+            # إجبار الدخول في المحادثة مباشرة
             await start_add_checker(update, context)
-            return ConversationHandler.END
+            return
         elif query.data == "adm_get_ids":
             try:
                 table_name = get_correct_table_name()
