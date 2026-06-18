@@ -121,19 +121,31 @@ def init_db():
             flood_until TIMESTAMP NULL,
             total_checks INTEGER DEFAULT 0,
             last_used TIMESTAMP NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_active BOOLEAN DEFAULT TRUE
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
     
-    if not column_exists('telegram_accounts', 'is_active'):
-        cursor.execute("ALTER TABLE telegram_accounts ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
-        conn.commit()
+    # التحقق من الأعمدة وإضافتها إذا كانت مفقودة (PostgreSQL متوافق)
+    required_columns = {
+        'is_active': 'BOOLEAN DEFAULT TRUE',
+        'session': 'TEXT'
+    }
+    
+    for col, col_type in required_columns.items():
+        # التحقق من وجود العمود
+        cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name='telegram_accounts' AND column_name='{col}'")
+        if not cursor.fetchone():
+            logger.info(f"Adding missing column: {col} to telegram_accounts")
+            cursor.execute(f"ALTER TABLE telegram_accounts ADD COLUMN {col} {col_type}")
+            conn.commit()
+        else:
+            logger.info(f"Column {col} already exists in telegram_accounts")
 
-    if not column_exists('telegram_accounts', 'session'):
-        cursor.execute("ALTER TABLE telegram_accounts ADD COLUMN session TEXT")
-        conn.commit()
+    # طباعة هيكلية الجدول للتحقق
+    cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='telegram_accounts'")
+    columns = [row[0] for row in cursor.fetchall()]
+    logger.info(f"Current telegram_accounts columns: {columns}")
  
     cursor.close()
     conn.close()
