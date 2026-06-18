@@ -198,9 +198,11 @@ async def force_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # دالات استقبال وإعداد ربط الحساب الفاحص من شات البوت (تدار من الهاتف)
 async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("[TRACE] Checker conversation started")
     query = update.callback_query
     user_id = query.from_user.id if query else update.effective_user.id
     if ADMIN_ID == 0 or user_id != ADMIN_ID:
+        logger.info("[TRACE] Unauthorized access attempt to checker conversation")
         return ConversationHandler.END
         
     msg_text = (
@@ -218,7 +220,7 @@ async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_phone_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    logger.info(f"[TRACE] get_phone_and_send RECEIVED: {text}")
+    logger.info(f"[TRACE] Checker state received message (PHONE state): {text}")
     try:
         phone, api_id, api_hash = text.split(",")
         context.user_data["chk_phone"] = phone.strip()
@@ -388,20 +390,21 @@ async def main():
         per_message=False
     )
     
-    # تسجيل المحادثة الخاص بإضافة الحساب الفاحص
+    # 1. تسجيل المحادثة الخاص بإضافة الحساب الفاحص (يجب أن يكون أولاً)
+    logger.info("[TRACE] Registering checker_conv")
     main_app.add_handler(checker_conv)
 
-    # معالجات الأوامر
+    # 2. معالجات الأوامر
     main_app.add_handler(CommandHandler("start", start))
     main_app.add_handler(CommandHandler("admin", admin_command))
+    main_app.add_handler(CallbackQueryHandler(button_handler))
     
-    # معالج الرسائل العام مع سجل تتبع
+    # 3. معالج الرسائل العام (يجب أن يكون الأخير)
     async def debug_handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"[TRACE] handle_token RECEIVED message: '{update.message.text}'")
         return await handle_token(update, context)
 
     main_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, debug_handle_token))
-    main_app.add_handler(CallbackQueryHandler(button_handler))
     
     await main_app.initialize()
     await main_app.updater.start_polling()
