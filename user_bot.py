@@ -271,23 +271,23 @@ async def hunt_per_country(context, user_id, username, api_key, channel, country
     """مهمة فرعية لصيد الأرقام لدولة محددة لضمان التوازي"""
     try:
         clean_country = str(country_code).strip()
-        logger.info(f"🏹 UserBot({user_id}): Hunting started for country: {clean_country}")
+        logger.info(f"[TRACE] hunt_per_country ENTERED for UserID={user_id}, Country={clean_country}")
         
         result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
         
         if result and result.get("status") == "success":
             phone_number = result.get("number")
-            logger.info(f"🏹 UserBot({user_id}): Number ACQUIRED: {phone_number} from {clean_country}")
+            logger.info(f"[TRACE] hunt_per_country ACQUIRED: {phone_number}. Passing to TelegramChecker...")
             
             account_checker = await telegram_checker.get_available_account()
             if not account_checker:
-                logger.warning(f"🏹 UserBot({user_id}): NO checker account available. Using default status.")
+                logger.warning(f"[TRACE] hunt_per_country NO checker account available. Using default status.")
                 status_text = "🟢 الرقم بدون جلسة"
             else:
-                logger.info(f"🏹 UserBot({user_id}): Checking {phone_number} using account {account_checker['id']}...")
+                logger.info(f"[TRACE] hunt_per_country Checker account found (ID={account_checker['id']}). Starting phone check...")
                 check_result = await telegram_checker.check_phone(account_checker, phone_number)
                 status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
-                logger.info(f"🏹 UserBot({user_id}): Check Result: {status_text}")
+                logger.info(f"[TRACE] hunt_per_country Check Finished. Status: {status_text}")
 
             country_name = clean_country.upper()
             country_flag = "🌐"
@@ -321,25 +321,26 @@ async def hunt_per_country(context, user_id, username, api_key, channel, country
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            logger.info(f"🏹 UserBot({user_id}): Sending report to channel: {channel}")
+            logger.info(f"[TRACE] hunt_per_country INVOKING send_message for Channel={channel}...")
             try:
-                await context.bot.send_message(
+                sent_msg = await context.bot.send_message(
                     chat_id=channel,
                     text=message_text,
                     parse_mode=ParseMode.HTML,
                     reply_markup=reply_markup
                 )
-                logger.info(f"🏹 UserBot({user_id}): MESSAGE SENT SUCCESSFULLY for {phone_number}")
+                logger.info(f"[TRACE] hunt_per_country SUCCESS! MessageID={sent_msg.message_id} sent for {phone_number}")
             except Exception as send_error:
-                logger.error(f"🏹 UserBot({user_id}): FAILED to send message: {send_error}")
+                logger.error(f"[TRACE] hunt_per_country Telegram API Exception: {str(send_error)}", exc_info=True)
         else:
-            logger.info(f"🏹 UserBot({user_id}): No number available for {clean_country}. Result: {result}")
+            logger.info(f"[TRACE] hunt_per_country NO number acquired for {clean_country}. Reason: {result.get('message')}")
     except Exception as e:
-        logger.error(f"🏹 UserBot({user_id}): ERROR in hunt_per_country for {country_code}: {e}", exc_info=True)
+        logger.error(f"[TRACE] hunt_per_country GLOBAL Exception for {country_code}: {str(e)}", exc_info=True)
 
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.user_id
+    logger.info(f"[TRACE] check_and_hunt_numbers JOB TRIGGERED for UserID={user_id}")
     account = db.get_site_account(user_id)
     channel = db.get_hunting_channel(user_id)
     countries = db.get_user_countries(user_id)

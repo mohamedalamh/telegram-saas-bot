@@ -30,21 +30,24 @@ class DurianAPI:
             f"{BASE_URL}/getMobile?name={username}&ApiKey={api_key}"
             f"&cuy={country_code}&pid={project_id}&num=1&noblack=0&serial=2"
         )
-        logger.info(f"📡 DurianAPI: Requesting number for {country_code}...")
+        logger.info(f"[TRACE] DurianAPI.order_number_by_name: Final URL generated: {url}")
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, timeout=10)
-                logger.info(f"📡 DurianAPI: Response Status: {response.status_code}")
+                logger.info(f"[TRACE] DurianAPI Response: Status={response.status_code}, RawBody={response.text}")
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"📡 DurianAPI: Data Received: {data}")
                     if data.get("code") == 200:
-                        return {"status": "success", "number": data.get("data")}
+                        extracted_num = data.get("data")
+                        logger.info(f"[TRACE] DurianAPI Success: Extracted Number: {extracted_num}")
+                        return {"status": "success", "number": extracted_num}
                     else:
-                        logger.warning(f"📡 DurianAPI: Error Code {data.get('code')}: {data.get('msg')}")
+                        logger.warning(f"[TRACE] DurianAPI Logic Error: Code={data.get('code')}, Msg={data.get('msg')}")
                         return {"status": "error", "message": data.get("msg", "Unknown error")}
+                else:
+                    logger.error(f"[TRACE] DurianAPI HTTP Error: Status={response.status_code}")
         except Exception as e:
-            logger.error(f"📡 DurianAPI: Connection Error: {e}")
+            logger.error(f"[TRACE] DurianAPI Exception: {str(e)}", exc_info=True)
         return {"status": "error", "message": "Connection failed"}
 
     @staticmethod
