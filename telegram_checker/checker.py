@@ -1,5 +1,6 @@
 import asyncio
 import os
+import logging
 from telethon import functions, types
 from telethon.errors import (
     FloodWaitError, UserPrivacyRestrictedError, PhoneNumberBannedError,
@@ -8,6 +9,8 @@ from telethon.errors import (
 from .telegram_client import telegram_client_manager
 from .account_manager import account_manager
 from .flood_manager import flood_manager
+
+logger = logging.getLogger(__name__)
 
 class TelegramChecker:
     def __init__(self):
@@ -51,7 +54,7 @@ class TelegramChecker:
             }
         except FloodWaitError as e:
             # في حال واجه الحساب الفاحص حظر مؤقت (سبام) من كثرة الفحص
-            flood_manager.set_flood(account["id"], e.seconds)
+            await flood_manager.set_flood(account["id"], e.seconds)
             await client.disconnect()
             return {
                 "status": "FLOOD",
@@ -69,20 +72,14 @@ class TelegramChecker:
 
     async def get_available_account(self):
         """ الحصول على أول حساب متاح للفحص. """
-        try:
-            logger.info(f"[DEBUG] AccountManager attributes: {dir(account_manager)}")
-            accounts = await account_manager.get_available_accounts()
-        except AttributeError as e:
-            logger.error(f"[ERROR] AccountManager has no attribute! Dir: {dir(account_manager)}")
-            raise e
+        # استخدام الدالة الصحيحة بالمفرد كما هو معرف في AccountManager
+        account = await account_manager.get_available_account()
             
-        if not accounts:
+        if not account:
             return None
-        for account in accounts:
-            if flood_manager.is_flooded(account["id"]):
-                continue
-            return account
-        return None
+        if await flood_manager.is_flooded(account["id"]):
+            return None
+        return account
 
     async def wait_for_account(self):
         """ الانتظار حتى يصبح هناك حساب متاح. """
@@ -101,7 +98,7 @@ class TelegramChecker:
             if result["status"] == "FLOOD":
                 continue
             if result["status"] == "BANNED":
-                account_manager.disable_account(account["id"])
+                await account_manager.disable_account(account["id"])
                 continue
             results.append(result)
             if callback:
@@ -125,12 +122,12 @@ class BatchChecker:
             
             result = await self.checker.check_phone(account, phone)
             if result["status"] == "FLOOD":
-                flood_manager.set_flood(account["id"], result["seconds"])
+                await flood_manager.set_flood(account["id"], result["seconds"])
                 queue.put_nowait(phone)
                 queue.task_done()
                 break
             elif result["status"] == "BANNED":
-                account_manager.disable_account(account["id"])
+                await account_manager.disable_account(account["id"])
                 queue.put_nowait(phone)
                 queue.task_done()
                 break
@@ -145,10 +142,11 @@ class BatchChecker:
         for phone in phones:
             await queue.put(phone)
             
-        accounts = await account_manager.get_available_accounts()
+        # جلب الحسابات باستخدام الدالة الصحيحة
+        accounts = await account_manager.get_all_accounts()
         workers = []
         for account in accounts:
-            if flood_manager.is_flooded(account["id"]):
+            if await flood_manager.is_flooded(account["id"]):
                 continue
             task = asyncio.create_task(
                 self.worker(account, queue, callback)
