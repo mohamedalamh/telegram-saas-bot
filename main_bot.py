@@ -194,11 +194,16 @@ async def force_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # دالات استقبال وإعداد ربط الحساب الفاحص من شات البوت (تدار من الهاتف)
 async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info("[TRACE] Checker conversation started")
+    logger.info("[TRACE] Conversation started via start_add_checker")
     query = update.callback_query
-    user_id = query.from_user.id if query else update.effective_user.id
+    if query:
+        await query.answer()
+        user_id = query.from_user.id
+    else:
+        user_id = update.effective_user.id
+        
     if ADMIN_ID == 0 or user_id != ADMIN_ID:
-        logger.info("[TRACE] Unauthorized access attempt to checker conversation")
+        logger.info("[TRACE] Unauthorized access attempt")
         return ConversationHandler.END
         
     msg_text = (
@@ -212,6 +217,7 @@ async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(msg_text, parse_mode="Markdown")
     else:
         await update.message.reply_text(msg_text, parse_mode="Markdown")
+    logger.info("[TRACE] State returned: PHONE")
     return PHONE
 
 async def get_phone_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -230,23 +236,27 @@ async def get_phone_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE)
             context.user_data["chk_api_hash"]
         )
         await update.message.reply_text("💬 وصلك كود الآن على حساب التليجرام الفاحص، يرجى إرساله هنا فوراً:")
+        logger.info("[TRACE] State returned: CODE")
         return CODE
     except Exception as e:
-        await update.message.reply_text(f"❌ فشل الاتصال بالحساب أو أن الصيغة غير صحيحة.\nالخطأ: `{str(e)}` \n\nأرسل /add_checker للمحاولة مجدداً.")
-        return ConversationHandler.END
+        await update.message.reply_text(f"❌ فشل الاتصال بالحساب أو أن الصيغة غير صحيحة.\nالخطأ: `{str(e)}`")
+        return PHONE
 
 async def get_code_and_verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = update.message.text.strip()
+    logger.info(f"[TRACE] Checker state received message (CODE state): {code}")
     phone = context.user_data["chk_phone"]
     await update.message.reply_text("⏳ جاري التحقق من كود تسجيل الدخول...")
     try:
         result = await login_manager.verify_code(phone, code)
         if result.get("status") == "PASSWORD_REQUIRED":
             await update.message.reply_text("🔒 هذا الحساب محمي بالتحقق بخطوتين، من فضلك أرسل باسوورد الحساب الآن:")
+            logger.info("[TRACE] State returned: PASSWORD")
             return PASSWORD
         if result.get("status") == "SUCCESS":
-            await update.message.reply_text(f"✅ تم ربط الحساب الفاحص بنجاح ممتد وضخه في قاعدة البيانات!\n👤 الاسم: {result.get('name')}")
+            await update.message.reply_text(f"✅ تم ربط الحساب الفاحص بنجاح!\n👤 الاسم: {result.get('name')}")
             await login_manager.cleanup()
+            logger.info("[TRACE] Conversation ended (SUCCESS)")
             return ConversationHandler.END
     except Exception as e:
         await update.message.reply_text(f"❌ خطأ برميجي أثناء تفعيل الكود: `{str(e)}`")
@@ -255,6 +265,7 @@ async def get_code_and_verify(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def get_password_and_verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     password = update.message.text.strip()
+    logger.info(f"[TRACE] Checker state received message (PASSWORD state)")
     phone = context.user_data["chk_phone"]
     await update.message.reply_text("⏳ جاري فك التحقق بخطوتين وتخزين الجلسة...")
     try:
@@ -265,6 +276,7 @@ async def get_password_and_verify(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"❌ كلمة المرور خاطئة أو انتهت مهلة الجلسة: `{str(e)}`")
     finally:
         await login_manager.cleanup()
+    logger.info("[TRACE] Conversation ended (PASSWORD SUCCESS/FAIL)")
     return ConversationHandler.END
 
 async def cancel_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
