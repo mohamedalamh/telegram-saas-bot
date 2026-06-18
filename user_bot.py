@@ -268,15 +268,15 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
 async def hunt_per_country(context, user_id, username, api_key, channel, country_code):
     """مهمة فرعية لصيد الأرقام لدولة محددة لضمان التوازي"""
     try:
-        # جلب الكود الرقمي الصحيح بناءً على القيمة المخزنة (سواء كانت كوداً أو اسماً قديماً)
-        # هذا يضمن أننا نرسل الكود الصحيح لـ Durian API
+        # جلب الكود الرقمي الصحيح بناءً على القيمة المخزنة
         numeric_code = country_code
+        clean_country = str(country_code).strip()
         for c in ALL_COUNTRIES:
             if c["code"] == country_code or c["name"] == country_code:
                 numeric_code = c["code"]
                 break
         
-        logger.info(f"[TRACE] hunt_per_country ENTERED for UserID={user_id}, Country={country_code}, NumericCode={numeric_code}")
+        logger.info(f"[TRACE] hunt_per_country ENTERED for UserID={user_id}, Country={clean_country}, NumericCode={numeric_code}")
         
         result = await DurianAPI.order_number_by_name(username, api_key, numeric_code, project_id="0257")
         

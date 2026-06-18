@@ -130,6 +130,10 @@ def init_db():
     if not column_exists('telegram_accounts', 'is_active'):
         cursor.execute("ALTER TABLE telegram_accounts ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
         conn.commit()
+
+    if not column_exists('telegram_accounts', 'session'):
+        cursor.execute("ALTER TABLE telegram_accounts ADD COLUMN session TEXT")
+        conn.commit()
  
     cursor.close()
     conn.close()
