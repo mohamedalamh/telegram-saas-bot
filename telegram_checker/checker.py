@@ -5,7 +5,7 @@ from telethon.errors import (
     FloodWaitError, UserPrivacyRestrictedError, PhoneNumberBannedError,
     SessionPasswordNeededError, PhoneNumberInvalidError
 )
-from .telegram_client import TelegramClientManager
+from .telegram_client import telegram_client_manager
 from .account_manager import account_manager
 from .flood_manager import flood_manager
 
@@ -15,10 +15,7 @@ class TelegramChecker:
 
     async def check_phone(self, account, phone):
         """ فحص حالة الرقم والجلسة بدقة متناهية بناءً على رد سيرفر التلغرام الفوري. """
-        client = TelegramClientManager(
-            account["session"], account["api_id"], account["api_hash"]
-        )
-        await client.connect()
+        client = await telegram_client_manager.get_client(account)
         try:
             # محاولة إرسال طلب الكود للرقم لمعرفة حالته وجلسته فوراً
             await client.send_code_request(phone)

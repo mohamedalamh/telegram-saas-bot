@@ -1,7 +1,6 @@
 import os
 import asyncio
 import logging
-import sqlite3
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, ConversationHandler
@@ -23,22 +22,8 @@ except Exception:
 PHONE, CODE, PASSWORD = range(3)
 
 def get_correct_table_name():
-    """دالة ذكية لاكتشاف اسم الجدول الصحيح في قاعدة البيانات تلقائياً"""
-    try:
-        conn = sqlite3.connect("database.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = cursor.fetchall()
-        conn.close()
-        for t in tables:
-            name = t[0]
-            if name in ["bots", "users", "sub_bots", "telegram_bots", "bot_users"]:
-                return name
-        if tables:
-            return tables[0][0]
-    except Exception:
-        pass
-    return "bots"
+    """دالة لضمان استخدام جدول البوتات الصحيح في PostgreSQL"""
+    return "user_bots"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -89,10 +74,11 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await bot_manager.stop_bot(target_id)
                 except Exception:
                     pass
-                conn = sqlite3.connect("database.db")
+                conn = db.get_connection()
                 cursor = conn.cursor()
-                cursor.execute(f"DELETE FROM {table_name} WHERE user_id = ?", (target_id,))
+                cursor.execute(f"DELETE FROM {table_name} WHERE user_id = %s", (target_id,))
                 conn.commit()
+                cursor.close()
                 conn.close()
                 await update.message.reply_text(f"🗑️ تم حذف المستخدم `{target_id}` نهائياً من الجدول `{table_name}` وإيقاف خط السحب الخاص به.")
             except Exception as e:
@@ -203,7 +189,8 @@ async def show_admin_panel(update: Update):
         await update.message.reply_text(text, reply_markup=reply_markup)
 
 # 🚀 الدالة المضافة حديثاً للإجبار وتخطي كاش أزرار التليجرام العالقة
-gisin19421@ocuser.com
+async def force_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await start_add_checker(update, context)
 
 # دالات استقبال وإعداد ربط الحساب الفاحص من شات البوت (تدار من الهاتف)
 async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -310,15 +297,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif query.data == "adm_get_ids":
             try:
                 table_name = get_correct_table_name()
-                conn = sqlite3.connect("database.db")
+                conn = db.get_connection()
                 cursor = conn.cursor()
-                cursor.execute(f"PRAGMA table_info({table_name})")
-                columns = cursor.fetchall()
-                id_column = "user_id" if columns else "user_id"
-                if columns:
-                    id_column = columns[0][1]
-                cursor.execute(f"SELECT {id_column} FROM {table_name}")
+                cursor.execute(f"SELECT user_id FROM {table_name}")
                 rows = cursor.fetchall()
+                cursor.close()
                 conn.close()
                 if rows:
                     user_list = "\n".join([f"👤 ID: `{row[0]}`" for row in rows])
