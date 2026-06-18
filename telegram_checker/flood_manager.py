@@ -1,4 +1,10 @@
 from datetime import datetime, timedelta
+import database
+import sys
+
+print("DATABASE FILE:", database.__file__)
+print("HAS get_account_flood:", hasattr(database, "get_account_flood"))
+print("DATABASE MEMBERS:", dir(database))
 
 from database import (
     set_account_flood,
