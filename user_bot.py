@@ -22,70 +22,22 @@ COUNTRY_MAP = {
     "20": {"name": "مصر", "emoji": "🇪🇬"},
 }
 
-# القائمة الكاملة لجميع دول العالم ورموزها المتوافقة مع الـ API
+# القائمة الكاملة لجميع دول العالم ورموزها الرقمية المتوافقة مع DurianRCS API (cuy parameter)
 ALL_COUNTRIES = [
-    {"name": "روسيا 🇷🇺", "code": "ru"}, {"name": "أمريكا 🇺🇸", "code": "us"},
-    {"name": "إندونيسيا 🇮🇩", "code": "id"}, {"name": "مصر 🇪🇬", "code": "eg"},
-    {"name": "بريطانيا 🇬🇧", "code": "uk"}, {"name": "الهند 🇮🇳", "code": "in"},
-    {"name": "البرازيل 🇧🇷", "code": "br"}, {"name": "المغرب 🇲🇦", "code": "ma"},
-    {"name": "الجزائر 🇩🇿", "code": "dz"}, {"name": "تونس 🇹🇳", "code": "tn"},
-    {"name": "العراق 🇮🇶", "code": "iq"}, {"name": "الأردن 🇯🇴", "code": "jo"},
-    {"name": "السعودية 🇸🇦", "code": "sa"}, {"name": "الإمارات 🇦🇪", "code": "ae"},
-    {"name": "الكويت 🇰🇼", "code": "kw"}, {"name": "البحرين 🇧🇭", "code": "bh"},
-    {"name": "عمان 🇴🇲", "code": "om"}, {"name": "قطر 🇶🇦", "code": "qa"},
-    {"name": "اليمن 🇾🇪", "code": "ye"}, {"name": "فلسطين 🇵🇸", "code": "ps"},
-    {"name": "لبنان 🇱🇧", "code": "lb"}, {"name": "سوريا 🇸🇾", "code": "sy"},
-    {"name": "السودان 🇸🇩", "code": "sd"}, {"name": "ليبيا 🇱🇾", "code": "ly"},
-    {"name": "تركيا 🇹🇷", "code": "tr"}, {"name": "ألمانيا 🇩🇪", "code": "de"},
-    {"name": "فرنسا 🇫🇷", "code": "fr"}, {"name": "إسبانيا 🇪🇸", "code": "es"},
-    {"name": "إيطاليا 🇮🇹", "code": "it"}, {"name": "كندا 🇨🇦", "code": "ca"},
-    {"name": "أسترايا 🇦🇺", "code": "au"}, {"name": "الصين 🇨🇳", "code": "cn"},
-    {"name": "اليابان 🇯🇵", "code": "jp"}, {"name": "كوريا 🇰🇷", "code": "kr"},
-    {"name": "فيتنام 🇻🇳", "code": "vn"}, {"name": "تايلاند 🇹🇭", "code": "th"},
-    {"name": "ماليزيا 🇲🇾", "code": "my"}, {"name": "الفلبين 🇵🇭", "code": "ph"},
-    {"name": "باكستان 🇵🇰", "code": "pk"}, {"name": "أفغانستان 🇦🇫", "code": "af"},
-    {"name": "إيران 🇮🇷", "code": "ir"}, {"name": "كولومبيا 🇨🇴", "code": "co"},
-    {"name": "المكسيك 🇲🇽", "code": "mx"}, {"name": "الأرجنتين 🇦🇷", "code": "ar"},
-    {"name": "بيرو 🇵🇪", "code": "pe"}, {"name": "فنزويلا 🇻🇪", "code": "ve"},
-    {"name": "تشيلي 🇨🇱", "code": "cl"}, {"name": "أوكرانيا 🇺🇦", "code": "ua"},
-    {"name": "بولندا 🇵🇱", "code": "pl"}, {"name": "رومانيا 🇷🇴", "code": "ro"},
-    {"name": "هولندا 🇳🇱", "code": "nl"}, {"name": "بلجيكا 🇧🇪", "code": "be"},
-    {"name": "السويد 🇸🇪", "code": "se"}, {"name": "النرويج 🇳🇴", "code": "no"},
-    {"name": "البرتغال 🇵🇹", "code": "pt"}, {"name": "جنوب أفريقيا 🇿🇦", "code": "za"},
-    {"name": "نيجيريا 🇳🇬", "code": "ng"}, {"name": "كينيا 🇰🇪", "code": "ke"},
-    {"name": "غانا 🇬🇭", "code": "gh"}, {"name": "إثيوبيا 🇪🇹", "code": "et"},
-    {"name": "موريتانيا 🇲🇷", "code": "mr"}, {"name": "أوزبكستان 🇺🇿", "code": "uz"},
-    {"name": "كازاخستان 🇰🇿", "code": "kz"}, {"name": "قرغيزستان 🇰🇬", "code": "kg"},
-    {"name": "طاجيكستان 🇹🇯", "code": "tj"}, {"name": "تركمانستان 🇹🇲", "code": "tm"},
-    {"name": "أذربيجان 🇦🇿", "code": "az"}, {"name": "جورجيا 🇬🇪", "code": "ge"},
-    {"name": "أرمينيا 🇦🇲", "code": "am"}, {"name": "النمسا 🇦🇹", "code": "at"},
-    {"name": "سويسرا 🇨🇭", "code": "ch"}, {"name": "اليونان 🇬🇷", "code": "gr"},
-    {"name": "بلغاريا 🇧🇬", "code": "bg"}, {"name": "كرواتيا 🇭🇷", "code": "hr"},
-    {"name": "صربيا 🇷🇸", "code": "rs"}, {"name": "جمهورية التشيك 🇨🇿", "code": "cz"},
-    {"name": "المجر 🇭🇺", "code": "hu"}, {"name": "الدانمارك 🇩🇰", "code": "dk"},
-    {"name": "فنلندا 🇫🇮", "code": "fi"}, {"name": "أيرلندا 🇮🇪", "code": "ie"},
-    {"name": "نيوزيلندا 🇳🇿", "code": "nz"}, {"name": "سنغافورة 🇸🇬", "code": "sg"},
-    {"name": "بغلاديش 🇧🇩", "code": "bd"}, {"name": "سريلانكا 🇱🇰", "code": "lk"},
-    {"name": "نيبال 🇳🇵", "code": "np"}, {"name": "ميانمار 🇲🇲", "code": "mm"},
-    {"name": "كمبوديا 🇰🇭", "code": "kh"}, {"name": "لاوس 🇱🇦", "code": "la"},
-    {"name": "منغوليا 🇲🇳", "code": "mn"}, {"name": "أنغولا 🇦🇴", "code": "ao"},
-    {"name": "الكاميرون 🇨🇲", "code": "cm"}, {"name": "ساحل العاج 🇨🇮", "code": "ci"},
-    {"name": "السنغال 🇸🇳", "code": "sn"}, {"name": "زيمبابوي 🇿🇼", "code": "zw"},
-    {"name": "تنزانيا 🇹🇿", "code": "tz"}, {"name": "أوغندا 🇺🇬", "code": "ug"},
-    {"name": "زامبيا 🇿🇲", "code": "zm"}, {"name": "مدغشقر 🇲🇬", "code": "mg"},
-    {"name": "كوبا 🇨🇺", "code": "cu"}, {"name": "بنما 🇵🇦", "code": "pa"},
-    {"name": "كوستاريكا 🇨🇷", "code": "cr"}, {"name": "جامايكا 🇯🇲", "code": "jm"},
-    {"name": "الأوروغواي 🇺🇾", "code": "uy"}, {"name": "الباراغواي 🇵🇾", "code": "py"},
-    {"name": "بوليفيا 🇧🇴", "code": "bo"}, {"name": "الإكوادور 🇪🇨", "code": "ec"},
-    {"name": "أيسلندا 🇮🇸", "code": "is"}, {"name": "قبرص 🇨🇾", "code": "cy"},
-    {"name": "مالطا 🇲🇹", "code": "mt"}, {"name": "ألبانيا 🇦🇱", "code": "al"},
-    {"name": "أندورا 🇦🇩", "code": "ad"}, {"name": "موناكو 🇲🇨", "code": "mc"},
-    {"name": "سان مارينو 🇸🇲", "code": "sm"}, {"name": "جزر البهاما 🇧🇸", "code": "bs"},
-    {"name": "باربادوس 🇧🇧", "code": "bb"}, {"name": "بليز 🇧🇿", "code": "bz"},
-    {"name": "غويانا 🇬🇾", "code": "gy"}, {"name": "سورينام 🇸🇷", "code": "sr"},
-    {"name": "فيجي 🇫🇯", "code": "fj"}, {"name": "بابوا غينيا 🇵🇬", "code": "pg"},
-    {"name": "جزر المالديف 🇲🇻", "code": "mv"}, {"name": "بروناي 🇧🇳", "code": "bn"},
-    {"name": "بوتان 🇧🇹", "code": "bt"}
+    {"name": "روسيا 🇷🇺", "code": "0"}, {"name": "أوكرانيا 🇺🇦", "code": "1"},
+    {"name": "كازاخستان 🇰🇿", "code": "2"}, {"name": "الصين 🇨🇳", "code": "3"},
+    {"name": "الفلبين 🇵🇭", "code": "4"}, {"name": "ميانمار 🇲🇲", "code": "5"},
+    {"name": "إندونيسيا 🇮🇩", "code": "6"}, {"name": "ماليزيا 🇲🇾", "code": "7"},
+    {"name": "فيتنام 🇻🇳", "code": "10"}, {"name": "أمريكا 🇺🇸", "code": "12"},
+    {"name": "بولندا 🇵🇱", "code": "15"}, {"name": "بريطانيا 🇬🇧", "code": "16"},
+    {"name": "الهند 🇮🇳", "code": "22"}, {"name": "رومانيا 🇷🇴", "code": "32"},
+    {"name": "كندا 🇨🇦", "code": "36"}, {"name": "المغرب 🇲🇦", "code": "37"},
+    {"name": "أوزبكستان 🇺🇿", "code": "40"}, {"name": "ألمانيا 🇩🇪", "code": "43"},
+    {"name": "تايلاند 🇹🇭", "code": "52"}, {"name": "إسبانيا 🇪🇸", "code": "56"},
+    {"name": "بنغلاديش 🇧🇩", "code": "60"}, {"name": "تركيا 🇹🇷", "code": "62"},
+    {"name": "باكستان 🇵🇰", "code": "66"}, {"name": "البرازيل 🇧🇷", "code": "73"},
+    {"name": "فرنسا 🇫🇷", "code": "78"}, {"name": "إيطاليا 🇮🇹", "code": "86"},
+    {"name": "الإمارات 🇦🇪", "code": "95"}, {"name": "مصر 🇪🇬", "code": "105"}
 ]
 
 # ==================== 1. القائمة الرئيسية ====================
@@ -319,16 +271,23 @@ async def hunt_per_country(context, user_id, username, api_key, channel, country
     """مهمة فرعية لصيد الأرقام لدولة محددة لضمان التوازي"""
     try:
         clean_country = str(country_code).strip()
+        logger.info(f"🏹 UserBot({user_id}): Hunting started for country: {clean_country}")
+        
         result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
+        
         if result and result.get("status") == "success":
             phone_number = result.get("number")
+            logger.info(f"🏹 UserBot({user_id}): Number ACQUIRED: {phone_number} from {clean_country}")
             
             account_checker = await telegram_checker.get_available_account()
             if not account_checker:
+                logger.warning(f"🏹 UserBot({user_id}): NO checker account available. Using default status.")
                 status_text = "🟢 الرقم بدون جلسة"
             else:
+                logger.info(f"🏹 UserBot({user_id}): Checking {phone_number} using account {account_checker['id']}...")
                 check_result = await telegram_checker.check_phone(account_checker, phone_number)
                 status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
+                logger.info(f"🏹 UserBot({user_id}): Check Result: {status_text}")
 
             country_name = clean_country.upper()
             country_flag = "🌐"
@@ -362,14 +321,21 @@ async def hunt_per_country(context, user_id, username, api_key, channel, country
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            await context.bot.send_message(
-                chat_id=channel,
-                text=message_text,
-                parse_mode=ParseMode.HTML,
-                reply_markup=reply_markup
-            )
+            logger.info(f"🏹 UserBot({user_id}): Sending report to channel: {channel}")
+            try:
+                await context.bot.send_message(
+                    chat_id=channel,
+                    text=message_text,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup
+                )
+                logger.info(f"🏹 UserBot({user_id}): MESSAGE SENT SUCCESSFULLY for {phone_number}")
+            except Exception as send_error:
+                logger.error(f"🏹 UserBot({user_id}): FAILED to send message: {send_error}")
+        else:
+            logger.info(f"🏹 UserBot({user_id}): No number available for {clean_country}. Result: {result}")
     except Exception as e:
-        logger.error(f"Error hunting for user {user_id} in country {country_code}: {e}")
+        logger.error(f"🏹 UserBot({user_id}): ERROR in hunt_per_country for {country_code}: {e}", exc_info=True)
 
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     job = context.job

@@ -30,17 +30,21 @@ class DurianAPI:
             f"{BASE_URL}/getMobile?name={username}&ApiKey={api_key}"
             f"&cuy={country_code}&pid={project_id}&num=1&noblack=0&serial=2"
         )
+        logger.info(f"📡 DurianAPI: Requesting number for {country_code}...")
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, timeout=10)
+                logger.info(f"📡 DurianAPI: Response Status: {response.status_code}")
                 if response.status_code == 200:
                     data = response.json()
+                    logger.info(f"📡 DurianAPI: Data Received: {data}")
                     if data.get("code") == 200:
                         return {"status": "success", "number": data.get("data")}
                     else:
+                        logger.warning(f"📡 DurianAPI: Error Code {data.get('code')}: {data.get('msg')}")
                         return {"status": "error", "message": data.get("msg", "Unknown error")}
         except Exception as e:
-            logger.error(f"Error ordering number: {e}")
+            logger.error(f"📡 DurianAPI: Connection Error: {e}")
         return {"status": "error", "message": "Connection failed"}
 
     @staticmethod
