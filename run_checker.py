@@ -1,7 +1,7 @@
 import asyncio
 import os
 import sys
-import sqlite3
+import database as db
 from telegram_checker.login_manager import login_manager
 
 # ⚠️ ضع بيانات الحساب الفاحص هنا بدقة بين علامات التنصيص ""
@@ -17,9 +17,16 @@ TWO_FACTOR_PASSWORD = ""
 
 async def main():
     print("\n=============================================")
-    print("🚀 بدء سكربت حقن الحساب الفاحص في قاعدة البيانات...")
+    print("🚀 بدء سكربت حقن الحساب الفاحص في قاعدة بيانات PostgreSQL...")
     print("=============================================\n")
     
+    # تأكد من تهيئة قاعدة البيانات
+    try:
+        db.init_db()
+    except Exception as e:
+        print(f"❌ خطأ في تهيئة قاعدة البيانات: {e}")
+        return
+
     if not VERIFICATION_CODE:
         # المرحلة الأولى: إرسال الكود
         print(f"⏳ جاري الاتصال بتليجرام لإرسال كود التحقق إلى الرقم: {PHONE} ...")
