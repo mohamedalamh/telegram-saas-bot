@@ -4,7 +4,7 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, ConversationHandler
 from telegram.request import HTTPXRequest # تم استيراده لمعالجة انتهاء مهلة الاتصال Timeout
 import database as db
 from bot_manager import bot_manager
@@ -59,7 +59,6 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if ADMIN_ID != 0 and user_id == ADMIN_ID and context.user_data.get("admin_action"):
         action = context.user_data.get("admin_action")
         table_name = get_correct_table_name()
-        
         if action == "add_days":
             try:
                 target_id, value = text.split(" ")
@@ -107,6 +106,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_valid:
         await status_msg.edit_text("❌ التوكن غير صالح! تأكد من الحصول عليه بشكل صحيح من @BotFather.")
         return
+        
     try:
         db.save_bot(user_id, text)
         await status_msg.delete()
@@ -114,6 +114,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await status_msg.edit_text(f"❌ خطأ في قاعدة البيانات: {e}")
         return
+        
     await show_dashboard(update, user_id, user_name)
 
 async def show_dashboard(update: Update, user_id: int, user_name: str):
@@ -137,6 +138,7 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
         f"🟢 ⪪ لديك اشتراك نشط، يمكنك هنا تشغيل وإيقاف البوت الخاص بك ⪪ {status}\n\n"
         f"⏰ ⪪ اشتراكك ⪪ {days_left} ⪪"
     )
+    
     keyboard = [
         [InlineKeyboardButton("🔑 توكن البوت", callback_data="show_token_info")],
         [
@@ -171,6 +173,7 @@ async def show_admin_panel(update: Update):
         total, active = db.get_stats()
     except Exception:
         total, active = 0, 0
+        
     text = (
         f"👑 **لوحة تحكم المطور الفنية الشاملة** 👑\n\n"
         f"📊 **إحصائيات النظام الفورية:**\n"
@@ -178,6 +181,7 @@ async def show_admin_panel(update: Update):
         f"🚀 البوتات الفرعية النشطة حالياً: {active}\n\n"
         f"⚙️ قم باختيار الإجراء المناسب لإدارة المشتركين والاشتراكات الشهرية:"
     )
+    
     keyboard = [
         [
             InlineKeyboardButton("➕ شحن/تجديد الأيام", callback_data="adm_add_days"),
@@ -198,11 +202,27 @@ async def show_admin_panel(update: Update):
     else:
         await update.message.reply_text(text, reply_markup=reply_markup)
 
+# 🚀 الدالة المضافة حديثاً للإجبار وتخطي كاش أزرار التليجرام العالقة
+async def force_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر مباشر يستدعي واجهة ربط الحساب الفاحص رغماً عن تضارب القوائم"""
+    user_id = update.effective_user.id
+    if ADMIN_ID == 0 or user_id != ADMIN_ID:
+        return ConversationHandler.END
+        
+    msg_text = (
+        "🚀 **نظام ربط حساب الفحص التلقائي (الوضع المباشر)**\n\n"
+        "أرسل بيانات الحساب الفاحص بالصيغة التالية تماماً:\n"
+        "`الرقم,api_id,api_hash`\n\n"
+        "مثال:\n"
+        "`+967777777777,28412234,b3a6c98ea...`"
+    )
+    await update.message.reply_text(msg_text, parse_mode="Markdown")
+    return PHONE
+
 # دالات استقبال وإعداد ربط الحساب الفاحص من شات البوت (تدار من الهاتف)
 async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id if query else update.effective_user.id
-    
     if ADMIN_ID == 0 or user_id != ADMIN_ID:
         return ConversationHandler.END
         
@@ -264,12 +284,12 @@ async def get_password_and_verify(update: Update, context: ContextTypes.DEFAULT_
     try:
         result = await login_manager.verify_password(phone, password)
         if result.get("status") == "SUCCESS":
-            await update.message.reply_text(f"✅ تم تخطي كلمة المرور بنجاح وحفظ الحساب الفاحص!\n👤 الاسم: {result.get('name')}")
+            await update.message.reply_text(f"✅ تم تخطّي كلمة المرور بنجاح وحفظ الحساب الفاحص!\n👤 الاسم: {result.get('name')}")
     except Exception as e:
         await update.message.reply_text(f"❌ كلمة المرور خاطئة أو انتهت مهلة الجلسة: `{str(e)}`")
     finally:
         await login_manager.cleanup()
-        return ConversationHandler.END
+    return ConversationHandler.END
 
 async def cancel_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await login_manager.cleanup()
@@ -299,7 +319,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("🗑️ أرسل `ID المستخدم` المراد مسحه تماماً من السيرفر وإلغاء بوتاته:")
             return
         elif query.data == "adm_add_checker":
-            # تفعيل المحادثة لربط الحساب الفاحص عند الضغط من لوحة التحكم
             await start_add_checker(update, context)
             return ConversationHandler.END
         elif query.data == "adm_get_ids":
@@ -309,7 +328,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 cursor = conn.cursor()
                 cursor.execute(f"PRAGMA table_info({table_name})")
                 columns = cursor.fetchall()
-                id_column = "user_id"
+                id_column = "user_id" if columns else "user_id"
                 if columns:
                     id_column = columns[0][1]
                 cursor.execute(f"SELECT {id_column} FROM {table_name}")
@@ -378,13 +397,12 @@ async def main():
         
     # ضبط مهلة طلبات الشبكة لتفادي انهيارات الـ ConnectTimeout الشائعة في التليجرام
     request_config = HTTPXRequest(connect_timeout=20.0, read_timeout=20.0)
-    
     main_app = Application.builder().token(MAIN_TOKEN).request(request_config).build()
     
     # محادثة إضافة الحساب الفاحص لتفادي تداخل النصوص مع توكن البوت العادي
     checker_conv = ConversationHandler(
         entry_points=[
-            CommandHandler("add_checker", start_add_checker),
+            CommandHandler("add_checker", force_add_checker), # استخدام الدالة المباشرة هنا للإجبار
             CallbackQueryHandler(button_handler, pattern="^adm_add_checker$")
         ],
         states={
