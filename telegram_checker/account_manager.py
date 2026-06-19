@@ -10,7 +10,7 @@ class AccountManager:
         conn = get_connection()
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, api_id, api_hash, session, is_active, flood_until
+            SELECT id, api_id, api_hash, string_session, is_active, flood_until
             FROM telegram_accounts
             WHERE is_active = TRUE
             ORDER BY id ASC
