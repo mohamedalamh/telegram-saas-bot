@@ -58,7 +58,7 @@ class DurianAPI:
         url = f"{BASE_URL}/getSms?name={username}&ApiKey={api_key}&phone={clean_phone}&pid={project_id}"
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=15)
+                response = await client.get(url, timeout=30)
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("code") == 200:

@@ -44,7 +44,7 @@ class TelegramClientManager:
         await client.connect()
 
         if not await client.is_user_authorized():
-            raise Exception("Telegram session is not authorized.")
+            raise SessionUnauthorizedError("Telegram session is not authorized.")
 
         self.clients[account_id] = client
 
@@ -66,6 +66,13 @@ class TelegramClientManager:
             try:
                 await self.clients[account_id].disconnect()
             except Exception:
+                pass
+
+        self.clients.clear()
+
+
+telegram_client_manager = TelegramClientManager()
+ except Exception:
                 pass
 
         self.clients.clear()

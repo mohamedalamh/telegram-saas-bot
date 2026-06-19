@@ -179,6 +179,7 @@ async def show_admin_panel(update: Update):
         ],
         [
             InlineKeyboardButton("⚙️ إضافة حساب فاحص", callback_data="adm_add_checker"),
+            InlineKeyboardButton("🚫 إدارة الفاحصين", callback_data="adm_manage_checkers"),
             InlineKeyboardButton("⬅️ الواجهة الرئيسية", callback_data="main_menu")
         ]
     ]
@@ -293,6 +294,31 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if ADMIN_ID != 0 and user_id == ADMIN_ID:
         if query.data == "admin_panel":
             await show_admin_panel(update)
+            return
+        elif query.data == "adm_manage_checkers":
+            await show_checker_management(update)
+            return
+        elif query.data.startswith("toggle_chk_"):
+            try:
+                acc_id = int(query.data.replace("toggle_chk_", ""))
+                from telegram_checker.account_manager import account_manager
+                
+                accounts = await account_manager.get_all_accounts()
+                acc = next((a for a in accounts if a["id"] == acc_id), None)
+                
+                if acc:
+                    if acc["is_active"]:
+                        await account_manager.disable_account(acc_id)
+                        msg = f"✅ تم تعطيل الحساب `{acc['phone']}` بنجاح."
+                    else:
+                        await account_manager.enable_account(acc_id)
+                        msg = f"✅ تم تفعيل الحساب `{acc['phone']}` بنجاح."
+                    await query.message.reply_text(msg)
+                    await show_checker_management(update)
+                else:
+                    await query.message.reply_text("❌ الحساب غير موجود.")
+            except Exception as e:
+                await query.message.reply_text(f"❌ خطأ أثناء تبديل حالة الحساب: {e}")
             return
         elif query.data == "adm_add_days":
             context.user_data["admin_action"] = "add_days"
@@ -410,6 +436,24 @@ async def main():
         return await handle_token(update, context)
 
     main_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, debug_handle_token))
+    
+    await main_app.initialize()
+    await main_app.updater.start_polling()
+    await main_app.start()
+    
+    asyncio.create_task(safe_restore())
+    
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except (KeyboardInterrupt, SystemExit):
+        await main_app.updater.stop()
+        await main_app.stop()
+        await main_app.shutdown()
+
+if __name__ == '__main__':
+    asyncio.run(main())
+oken))
     
     await main_app.initialize()
     await main_app.updater.start_polling()

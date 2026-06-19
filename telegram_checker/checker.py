@@ -18,7 +18,15 @@ class TelegramChecker:
 
     async def check_phone(self, account, phone):
         """ فحص حالة الرقم والجلسة بدقة متناهية بناءً على رد سيرفر التلغرام الفوري. """
-        client = await telegram_client_manager.get_client(account)
+        try:
+            client = await telegram_client_manager.get_client(account)
+        except SessionUnauthorizedError:
+            await account_manager.disable_account(account["id"])
+            return {
+                "status": "ACCOUNT_DISABLED",
+                "phone": phone,
+                "status_text": "❌ حساب الفاحص تالف وتم تعطيله"
+            }
         try:
             # محاولة إرسال طلب الكود للرقم لمعرفة حالته وجلسته فوراً
             await client.send_code_request(phone)
