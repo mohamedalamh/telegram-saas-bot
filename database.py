@@ -129,7 +129,6 @@ def init_db():
     # التحقق من الأعمدة وإضافتها إذا كانت مفقودة (PostgreSQL متوافق)
     required_columns = {
         'is_active': 'BOOLEAN DEFAULT TRUE',
-        'session': 'TEXT'
     }
     
     for col, col_type in required_columns.items():
