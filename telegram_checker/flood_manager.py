@@ -1,17 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import database
-import sys
-
-print("DATABASE FILE:", database.__file__)
-print("HAS get_account_flood:", hasattr(database, "get_account_flood"))
-print("DATABASE MEMBERS:", dir(database))
-
-from database import (
-    set_account_flood,
-    increase_account_checks,
-    get_account_flood
-)
-
 
 class FloodManager:
 
@@ -22,14 +10,14 @@ class FloodManager:
         flood_until = get_account_flood(account_id)
         if not flood_until:
             return False
-        return datetime.utcnow() < flood_until
+        return datetime.now(timezone.utc) < flood_until
 
     async def set_flood(self, account_id, seconds):
         """
         عند دخول الحساب FloodWait.
         """
 
-        flood_until = datetime.utcnow() + timedelta(seconds=seconds)
+        flood_until = datetime.now(timezone.utc) + timedelta(seconds=seconds)
 
         set_account_flood(
             account_id,
