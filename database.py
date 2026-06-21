@@ -65,15 +65,6 @@ def init_db():
         conn.commit()
 
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_site_accounts (
-            user_id BIGINT PRIMARY KEY,
-            username TEXT NOT NULL,
-            api_key TEXT NOT NULL
-        )
-    ''')
-    conn.commit()
-
-    cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_hunting_channels (
             user_id BIGINT PRIMARY KEY,
             channel_id TEXT NOT NULL
@@ -98,7 +89,57 @@ def init_db():
     ''')
     conn.commit()
 
-    # إنشاء جدول حسابات الفحص مع عمود is_active بدلاً من status
+    # --- ترقية جدول حسابات الموقع إلى V2 (متعدد) ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_site_accounts_v2 (
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            username TEXT NOT NULL,
+            api_key TEXT NOT NULL,
+            is_active BOOLEAN DEFAULT FALSE,
+            UNIQUE(user_id, username)
+        )
+    """)
+    conn.commit()
+
+    # نقل البيانات القديمة إذا كان الجدول القديم موجوداً ولم تتم ترقيته
+    if not column_exists('user_site_accounts_v2', 'is_active') and column_exists('user_site_accounts', 'username') and not column_exists('user_site_accounts', 'id'):
+        logger.info("Migrating old user_site_accounts to v2...")
+        try:
+            cursor.execute("""
+                INSERT INTO user_site_accounts_v2 (user_id, username, api_key, is_active)
+                SELECT user_id, username, api_key, TRUE
+                FROM user_site_accounts
+                ON CONFLICT (user_id, username) DO NOTHING
+            """)
+            conn.commit()
+            cursor.execute("DROP TABLE user_site_accounts")
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Migration error: {e}")
+            conn.rollback()
+
+    # إعادة تسمية v2 إلى الاسم الأصلي
+    if column_exists('user_site_accounts_v2', 'is_active'):
+        cursor.execute("DROP TABLE IF EXISTS user_site_accounts")
+        conn.commit()
+        cursor.execute("ALTER TABLE user_site_accounts_v2 RENAME TO user_site_accounts")
+        conn.commit()
+        logger.info("Renamed user_site_accounts_v2 to user_site_accounts")
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_site_accounts (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                username TEXT NOT NULL,
+                api_key TEXT NOT NULL,
+                is_active BOOLEAN DEFAULT FALSE,
+                UNIQUE(user_id, username)
+            )
+        """)
+        conn.commit()
+
+    # جدول حسابات الفحص
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS telegram_accounts (
             id SERIAL PRIMARY KEY,
@@ -115,45 +156,83 @@ def init_db():
     """)
     conn.commit()
 
-    # التأكد من وجود عمود is_active (إذا كان الجدول قديماً)
     if not column_exists('telegram_accounts', 'is_active'):
-        logger.info("Adding missing column: is_active to telegram_accounts")
         cursor.execute("ALTER TABLE telegram_accounts ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
         conn.commit()
-
-    # إزالة العمود القديم status إن وُجد لتجنب التعارض
     if column_exists('telegram_accounts', 'status'):
-        logger.info("Dropping deprecated column: status from telegram_accounts")
         try:
             cursor.execute("ALTER TABLE telegram_accounts DROP COLUMN status")
             conn.commit()
-        except Exception as e:
-            logger.warning(f"Could not drop status column: {e}")
+        except:
+            pass
 
     cursor.close()
     conn.close()
 
-# --- الدوال المضافة حديثاً لدعم إدارة الحسابات الفاحصة ---
-def get_all_checkers():
-    """استرجاع كل حسابات الفحص مع حالة التفعيل"""
+# --- دوال حسابات DurianRCS (متعددة) ---
+def save_site_account_v2(user_id, username, api_key):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, phone, is_active FROM telegram_accounts ORDER BY id")
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return rows  # list of (id, phone, is_active)
+    try:
+        cursor.execute("UPDATE user_site_accounts SET is_active = FALSE WHERE user_id = %s", (user_id,))
+        cursor.execute("""
+            INSERT INTO user_site_accounts (user_id, username, api_key, is_active)
+            VALUES (%s, %s, %s, TRUE)
+            ON CONFLICT (user_id, username) DO UPDATE SET api_key = EXCLUDED.api_key, is_active = TRUE
+        """, (user_id, username, api_key))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
 
-def toggle_checker(account_id):
-    """تبديل حالة حساب الفحص (تفعيل/تعطيل)"""
+def get_all_site_accounts(user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE telegram_accounts SET is_active = NOT is_active WHERE id = %s", (account_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        cursor.execute("SELECT id, username, api_key, is_active FROM user_site_accounts WHERE user_id = %s ORDER BY id", (user_id,))
+        rows = cursor.fetchall()
+        return rows
+    finally:
+        cursor.close()
+        conn.close()
 
-# --- بقية الدوال مع تعديلها لاستخدام is_active ---
+def set_active_site_account(user_id, account_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE user_site_accounts SET is_active = FALSE WHERE user_id = %s", (user_id,))
+        cursor.execute("UPDATE user_site_accounts SET is_active = TRUE WHERE id = %s AND user_id = %s", (account_id, user_id))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
+def delete_site_account(user_id, account_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM user_site_accounts WHERE id = %s AND user_id = %s", (account_id, user_id))
+        cursor.execute("SELECT COUNT(*) FROM user_site_accounts WHERE user_id = %s AND is_active = TRUE", (user_id,))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("UPDATE user_site_accounts SET is_active = TRUE WHERE id = (SELECT id FROM user_site_accounts WHERE user_id = %s LIMIT 1)", (user_id,))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_site_account(user_id):
+    """الحساب النشط فقط"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT username, api_key FROM user_site_accounts WHERE user_id = %s AND is_active = TRUE LIMIT 1", (user_id,))
+        row = cursor.fetchone()
+        return row
+    finally:
+        cursor.close()
+        conn.close()
+
+# --- باقي الدوال (موجودة مسبقاً) ---
 def save_bot(user_id, token):
     conn = get_connection()
     cursor = conn.cursor()
@@ -239,33 +318,6 @@ def get_stats():
         conn.close()
         return 0, 0
 
-def save_site_account(user_id, username, api_key):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO user_site_accounts (user_id, username, api_key)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (user_id)
-        DO UPDATE SET username = EXCLUDED.username, api_key = EXCLUDED.api_key;
-    ''', (user_id, username, api_key))
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-def get_site_account(user_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('SELECT username, api_key FROM user_site_accounts WHERE user_id = %s', (user_id,))
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        return row
-    except Exception:
-        cursor.close()
-        conn.close()
-        return None
-
 def save_hunting_channel(user_id, channel_id):
     conn = get_connection()
     cursor = conn.cursor()
@@ -283,7 +335,10 @@ def get_hunting_channel(user_id):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('SELECT channel_id FROM user_hunting_channels WHERE user_id = %s', (user_id,))
+        cursor.execute(
+            'SELECT channel_id FROM user_hunting_channels WHERE user_id = %s',
+            (user_id,)
+        )
         row = cursor.fetchone()
         return row[0] if row else None
     finally:
@@ -327,7 +382,7 @@ def add_user_country(user_id, country_name):
     finally:
         cursor.close()
         conn.close()
-        
+
 def delete_user_country(user_id, country_name):
     conn = get_connection()
     cursor = conn.cursor()
@@ -337,6 +392,23 @@ def delete_user_country(user_id, country_name):
     finally:
         cursor.close()
         conn.close()
+
+def get_all_checkers():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, phone, is_active FROM telegram_accounts ORDER BY id")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+def toggle_checker(account_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE telegram_accounts SET is_active = NOT is_active WHERE id = %s", (account_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 def get_account_flood(account_id):
     conn = get_connection()
@@ -366,7 +438,6 @@ def save_telegram_account(phone, api_id, api_hash, string_session):
     conn.close()
 
 def get_telegram_accounts():
-    """جلب كل حسابات الفحص (متوافقة مع النظام الجديد)"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -410,7 +481,6 @@ def increase_account_checks(account_id):
     conn.close()
 
 def get_best_telegram_account():
-    """اختيار أفضل حساب فحص نشط وغير محظور"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
