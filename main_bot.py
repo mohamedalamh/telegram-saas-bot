@@ -4,10 +4,10 @@ import logging
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, ConversationHandler
-from telegram.request import HTTPXRequest # تم استيراده لمعالجة انتهاء مهلة الاتصال Timeout
+from telegram.request import HTTPXRequest
 import database as db
 from bot_manager import bot_manager
-from telegram_checker.login_manager import login_manager # استيراد مدير تسجيل الدخول
+from telegram_checker.login_manager import login_manager
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,11 +18,9 @@ try:
 except Exception:
     ADMIN_ID = 0
 
-# تحديد مراحل المحادثة الخاصة بربط الحساب الفاحص من الهاتف
 PHONE, CODE, PASSWORD = range(3)
 
 def get_correct_table_name():
-    """دالة لضمان استخدام جدول البوتات الصحيح في PostgreSQL"""
     return "user_bots"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -39,8 +37,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
     text = update.message.text.strip()
-    
-    # التحقق مما إذا كان المدخل نصاً موجهاً للإدارة
+
     if ADMIN_ID != 0 and user_id == ADMIN_ID and context.user_data.get("admin_action"):
         action = context.user_data.get("admin_action")
         table_name = get_correct_table_name()
@@ -54,7 +51,6 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ صيغة خاطئة. يرجى إدخال: `المعرف القيمة` (مثال: `834033986 30`)")
             context.user_data.pop("admin_action", None)
             return
-            
         elif action == "ban":
             try:
                 target_id, value = text.split(" ")
@@ -66,7 +62,6 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ صيغة خاطئة. يرجى إدخال: `المعرف القيمة` (مثال للحظر: `834033986 1`)")
             context.user_data.pop("admin_action", None)
             return
-            
         elif action == "delete_user":
             try:
                 target_id = int(text)
@@ -86,13 +81,11 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.pop("admin_action", None)
             return
 
-    # معالجة استقبال التوكن الجديد وحفظه للمستخدم العادي بشكل طبيعي
     status_msg = await update.message.reply_text("⏳ جاري التحقق من صحة التوكن المرسل وحفظه...")
     is_valid = await bot_manager.validate_token(text)
     if not is_valid:
         await status_msg.edit_text("❌ التوكن غير صالح! تأكد من الحصول عليه بشكل صحيح من @BotFather.")
         return
-        
     try:
         db.save_bot(user_id, text)
         await status_msg.delete()
@@ -100,7 +93,6 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await status_msg.edit_text(f"❌ خطأ في قاعدة البيانات: {e}")
         return
-        
     await show_dashboard(update, user_id, user_name)
 
 async def show_dashboard(update: Update, user_id: int, user_name: str):
@@ -118,13 +110,13 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
                 days_left = f"{max(0, delta.days)} يوم"
     except Exception:
         days_left = "36 يوم"
-        
+
     text = (
         f"👤 ⪪ حياك الله يا {user_name} 🦾، أهلاً وسهلاً ومرحباً بك.\n\n"
         f"🟢 ⪪ لديك اشتراك نشط، يمكنك هنا تشغيل وإيقاف البوت الخاص بك ⪪ {status}\n\n"
         f"⏰ ⪪ اشتراكك ⪪ {days_left} ⪪"
     )
-    
+
     keyboard = [
         [InlineKeyboardButton("🔑 توكن البوت", callback_data="show_token_info")],
         [
@@ -139,7 +131,7 @@ async def show_dashboard(update: Update, user_id: int, user_name: str):
     ]
     if ADMIN_ID != 0 and user_id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("👑 لوحة تحكم الإدارة 👑", callback_data="admin_panel")])
-        
+
     reply_markup = InlineKeyboardMarkup(keyboard)
     if update.message:
         await update.message.reply_text(text, reply_markup=reply_markup)
@@ -159,7 +151,7 @@ async def show_admin_panel(update: Update):
         total, active = db.get_stats()
     except Exception:
         total, active = 0, 0
-        
+
     text = (
         f"👑 **لوحة تحكم المطور الفنية الشاملة** 👑\n\n"
         f"📊 **إحصائيات النظام الفورية:**\n"
@@ -167,7 +159,7 @@ async def show_admin_panel(update: Update):
         f"🚀 البوتات الفرعية النشطة حالياً: {active}\n\n"
         f"⚙️ قم باختيار الإجراء المناسب لإدارة المشتركين والاشتراكات الشهرية:"
     )
-    
+
     keyboard = [
         [
             InlineKeyboardButton("➕ شحن/تجديد الأيام", callback_data="adm_add_days"),
@@ -179,7 +171,9 @@ async def show_admin_panel(update: Update):
         ],
         [
             InlineKeyboardButton("⚙️ إضافة حساب فاحص", callback_data="adm_add_checker"),
-            InlineKeyboardButton("🚫 إدارة الفاحصين", callback_data="adm_manage_checkers"),
+            InlineKeyboardButton("👥 إدارة الحسابات الفاحصة", callback_data="adm_manage_checkers")
+        ],
+        [
             InlineKeyboardButton("⬅️ الواجهة الرئيسية", callback_data="main_menu")
         ]
     ]
@@ -189,11 +183,61 @@ async def show_admin_panel(update: Update):
     else:
         await update.message.reply_text(text, reply_markup=reply_markup)
 
-# 🚀 الدالة المضافة حديثاً للإجبار وتخطي كاش أزرار التليجرام العالقة
+# ---------- دوال إدارة الحسابات الفاحصة (باستخدام db مباشرة) ----------
+async def show_checker_management(update: Update):
+    """عرض قائمة حسابات الفحص مع أزرار التفعيل/التعطيل"""
+    accounts = db.get_all_checkers()
+    if not accounts:
+        text = "❌ لا توجد حسابات فحص مضافة بعد."
+        keyboard = [[InlineKeyboardButton("🔙 العودة للوحة الإدارة", callback_data="admin_panel")]]
+    else:
+        text = "👥 **قائمة حسابات الفحص:**\n\nاضغط على أي حساب لتبديل حالته بين مفعل ومعطل."
+        keyboard = []
+        for acc_id, phone, is_active in accounts:
+            status_emoji = "🟢 مفعل" if is_active else "🔴 معطل"
+            btn_text = f"{status_emoji} - {phone}"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"toggle_chk_{acc_id}")])
+        keyboard.append([InlineKeyboardButton("🔙 العودة للوحة الإدارة", callback_data="admin_panel")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+
+async def toggle_checker_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تبديل حالة حساب الفحص عند الضغط على زر"""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    if ADMIN_ID == 0 or user_id != ADMIN_ID:
+        await query.answer("غير مصرح", show_alert=True)
+        return
+
+    try:
+        acc_id = int(query.data.replace("toggle_chk_", ""))
+    except ValueError:
+        await query.answer("خطأ في البيانات", show_alert=True)
+        return
+
+    # جلب اسم الحساب للرسالة
+    accounts = db.get_all_checkers()
+    acc = next((a for a in accounts if a[0] == acc_id), None)
+    if not acc:
+        await query.message.reply_text("❌ الحساب غير موجود.")
+        return
+
+    phone = acc[1]
+    old_status = acc[2]
+    # تبديل الحالة
+    db.toggle_checker(acc_id)
+    new_status = not old_status
+    status_text = "تفعيل" if new_status else "تعطيل"
+    await query.message.reply_text(f"✅ تم {status_text} الحساب `{phone}` بنجاح.")
+    # تحديث القائمة مباشرة
+    await show_checker_management(update)
+
+# ---------- بقية الدوال (لم تتغير) ----------
 async def force_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await start_add_checker(update, context)
 
-# دالات استقبال وإعداد ربط الحساب الفاحص من شات البوت (تدار من الهاتف)
 async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("[TRACE] Conversation started via start_add_checker")
     query = update.callback_query
@@ -202,11 +246,11 @@ async def start_add_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = query.from_user.id
     else:
         user_id = update.effective_user.id
-        
+
     if ADMIN_ID == 0 or user_id != ADMIN_ID:
         logger.info("[TRACE] Unauthorized access attempt")
         return ConversationHandler.END
-        
+
     msg_text = (
         "🚀 **نظام ربط حساب الفحص التلقائي**\n\n"
         "أرسل بيانات الحساب الفاحص بالصيغة التالية تماماً:\n"
@@ -229,7 +273,7 @@ async def get_phone_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data["chk_phone"] = phone.strip()
         context.user_data["chk_api_id"] = api_id.strip()
         context.user_data["chk_api_hash"] = api_hash.strip()
-        
+
         await update.message.reply_text("⏳ جاري الاتصال بخوادم التليجرام وإرسال كود التحقق...")
         await login_manager.send_code(
             context.user_data["chk_phone"],
@@ -290,7 +334,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = query.from_user.id
     user_name = query.from_user.first_name
-    
+
     if ADMIN_ID != 0 and user_id == ADMIN_ID:
         if query.data == "admin_panel":
             await show_admin_panel(update)
@@ -299,26 +343,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_checker_management(update)
             return
         elif query.data.startswith("toggle_chk_"):
-            try:
-                acc_id = int(query.data.replace("toggle_chk_", ""))
-                from telegram_checker.account_manager import account_manager
-                
-                accounts = await account_manager.get_all_accounts()
-                acc = next((a for a in accounts if a["id"] == acc_id), None)
-                
-                if acc:
-                    if acc["is_active"]:
-                        await account_manager.disable_account(acc_id)
-                        msg = f"✅ تم تعطيل الحساب `{acc['phone']}` بنجاح."
-                    else:
-                        await account_manager.enable_account(acc_id)
-                        msg = f"✅ تم تفعيل الحساب `{acc['phone']}` بنجاح."
-                    await query.message.reply_text(msg)
-                    await show_checker_management(update)
-                else:
-                    await query.message.reply_text("❌ الحساب غير موجود.")
-            except Exception as e:
-                await query.message.reply_text(f"❌ خطأ أثناء تبديل حالة الحساب: {e}")
+            await toggle_checker_callback(update, context)
             return
         elif query.data == "adm_add_days":
             context.user_data["admin_action"] = "add_days"
@@ -351,14 +376,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = [[InlineKeyboardButton("🔙 العودة للوحة الإدارة", callback_data="admin_panel")]]
             await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
-            
+
     if query.data == "main_menu":
         await show_dashboard(update, user_id, user_name)
         return
-        
+
     db_data = db.get_bot(user_id)
     token = db_data[0] if (db_data and len(db_data) > 0) else None
-    
+
     if query.data == "show_token_info":
         if not token:
             await query.message.reply_text("📥 لم تقم بربط توكن حتى الآن.")
@@ -401,12 +426,10 @@ async def main():
         db.init_db()
     except Exception as e:
         logger.error(f"Database init error: {e}")
-        
-    # ضبط مهلة طلبات الشبكة لتفادي انهيارات الـ ConnectTimeout الشائعة في التليجرام
+
     request_config = HTTPXRequest(connect_timeout=20.0, read_timeout=20.0)
     main_app = Application.builder().token(MAIN_TOKEN).request(request_config).build()
-    
-    # محادثة إضافة الحساب الفاحص لتفادي تداخل النصوص مع توكن البوت العادي
+
     checker_conv = ConversationHandler(
         entry_points=[
             CommandHandler("add_checker", force_add_checker),
@@ -420,29 +443,26 @@ async def main():
         fallbacks=[CommandHandler("cancel", cancel_process)],
         per_message=False
     )
-    
-    # 1. تسجيل المحادثة الخاص بإضافة الحساب الفاحص (يجب أن يكون أولاً)
+
     logger.info("[TRACE] Registering checker_conv")
     main_app.add_handler(checker_conv)
 
-    # 2. معالجات الأوامر
     main_app.add_handler(CommandHandler("start", start))
     main_app.add_handler(CommandHandler("admin", admin_command))
     main_app.add_handler(CallbackQueryHandler(button_handler))
-    
-    # 3. معالج الرسائل العام (يجب أن يكون الأخير)
+
     async def debug_handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"[TRACE] handle_token RECEIVED message: '{update.message.text}'")
         return await handle_token(update, context)
 
     main_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, debug_handle_token))
-    
+
     await main_app.initialize()
     await main_app.updater.start_polling()
     await main_app.start()
-    
+
     asyncio.create_task(safe_restore())
-    
+
     try:
         while True:
             await asyncio.sleep(3600)
