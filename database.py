@@ -4,27 +4,23 @@ import logging
 import pg8000
 from urllib.parse import urlparse
 
-# إعداد الـ Logger لضمان تسجيل أخطاء قاعدة البيانات بدقة
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_connection():
-    """الاتصال الآمن والمباشر بسيرفر Neon بالتفكيك البرمجي الداخلي مع آلية إعادة محاولة"""
     if not DATABASE_URL:
         logger.error("DATABASE_URL missing in environment variables!")
         raise ValueError("DATABASE_URL is not set")
-        
+
     parsed_url = urlparse(DATABASE_URL.strip())
-    
     username = parsed_url.username
     password = parsed_url.password
     host = parsed_url.hostname
     port = parsed_url.port if parsed_url.port else 5432
     dbname = parsed_url.path.lstrip('/')
 
-    # محاولة الاتصال 5 مرات متتالية لإيقاظ السيرفر الخامل
     for attempt in range(5):
         try:
             return pg8000.connect(
@@ -45,8 +41,7 @@ def get_connection():
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
-    
-    # 1. إنشاء جدول البوتات الأساسي
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_bots (
             user_id BIGINT PRIMARY KEY,
@@ -58,7 +53,6 @@ def init_db():
     ''')
     conn.commit()
 
-    # فحص وإضافة الأعمدة الناقصة بطريقة احترافية
     def column_exists(table, column):
         cursor.execute(f"SELECT COUNT(*) FROM information_schema.columns WHERE table_name='{table}' AND column_name='{column}'")
         return cursor.fetchone()[0] > 0
@@ -66,12 +60,10 @@ def init_db():
     if not column_exists('user_bots', 'expires_at'):
         cursor.execute("ALTER TABLE user_bots ADD COLUMN expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '30 days'")
         conn.commit()
-
     if not column_exists('user_bots', 'is_banned'):
         cursor.execute("ALTER TABLE user_bots ADD COLUMN is_banned INTEGER DEFAULT 0")
         conn.commit()
 
-    # 2. إنشاء جدول ربط الحسابات لموقع DurianRCS
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_site_accounts (
             user_id BIGINT PRIMARY KEY,
@@ -81,7 +73,6 @@ def init_db():
     ''')
     conn.commit()
 
-    # 3. إنشاء جدول قنوات الصيد الجديدة تلقائياً
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_hunting_channels (
             user_id BIGINT PRIMARY KEY,
@@ -90,7 +81,6 @@ def init_db():
     ''')
     conn.commit()
 
-    # 4. إنشاء جدول تتبع حالة تشغيل الصيد الفعلي للمستخدم
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_hunting_status (
             user_id BIGINT PRIMARY KEY,
@@ -99,7 +89,6 @@ def init_db():
     ''')
     conn.commit()
 
-    # 5. إنشاء جدول الدول المراد الصيد منها
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_countries (
             user_id BIGINT,
@@ -108,8 +97,8 @@ def init_db():
         )
     ''')
     conn.commit()
-    
-    # 6. حسابات Telegram المستخدمة لفحص الأرقام
+
+    # إنشاء جدول حسابات الفحص مع عمود is_active بدلاً من status
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS telegram_accounts (
             id SERIAL PRIMARY KEY,
@@ -117,7 +106,7 @@ def init_db():
             api_id INTEGER NOT NULL,
             api_hash TEXT NOT NULL,
             string_session TEXT NOT NULL,
-            status INTEGER DEFAULT 1,
+            is_active BOOLEAN DEFAULT TRUE,
             flood_until TIMESTAMP NULL,
             total_checks INTEGER DEFAULT 0,
             last_used TIMESTAMP NULL,
@@ -125,30 +114,46 @@ def init_db():
         )
     """)
     conn.commit()
-    
-    # التحقق من الأعمدة وإضافتها إذا كانت مفقودة (PostgreSQL متوافق)
-    required_columns = {
-        'is_active': 'BOOLEAN DEFAULT TRUE',
-    }
-    
-    for col, col_type in required_columns.items():
-        # التحقق من وجود العمود
-        cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name='telegram_accounts' AND column_name='{col}'")
-        if not cursor.fetchone():
-            logger.info(f"Adding missing column: {col} to telegram_accounts")
-            cursor.execute(f"ALTER TABLE telegram_accounts ADD COLUMN {col} {col_type}")
-            conn.commit()
-        else:
-            logger.info(f"Column {col} already exists in telegram_accounts")
 
-    # طباعة هيكلية الجدول للتحقق
-    cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='telegram_accounts'")
-    columns = [row[0] for row in cursor.fetchall()]
-    logger.info(f"Current telegram_accounts columns: {columns}")
- 
+    # التأكد من وجود عمود is_active (إذا كان الجدول قديماً)
+    if not column_exists('telegram_accounts', 'is_active'):
+        logger.info("Adding missing column: is_active to telegram_accounts")
+        cursor.execute("ALTER TABLE telegram_accounts ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
+        conn.commit()
+
+    # إزالة العمود القديم status إن وُجد لتجنب التعارض
+    if column_exists('telegram_accounts', 'status'):
+        logger.info("Dropping deprecated column: status from telegram_accounts")
+        try:
+            cursor.execute("ALTER TABLE telegram_accounts DROP COLUMN status")
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Could not drop status column: {e}")
+
     cursor.close()
     conn.close()
 
+# --- الدوال المضافة حديثاً لدعم إدارة الحسابات الفاحصة ---
+def get_all_checkers():
+    """استرجاع كل حسابات الفحص مع حالة التفعيل"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, phone, is_active FROM telegram_accounts ORDER BY id")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows  # list of (id, phone, is_active)
+
+def toggle_checker(account_id):
+    """تبديل حالة حساب الفحص (تفعيل/تعطيل)"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE telegram_accounts SET is_active = NOT is_active WHERE id = %s", (account_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+# --- بقية الدوال مع تعديلها لاستخدام is_active ---
 def save_bot(user_id, token):
     conn = get_connection()
     cursor = conn.cursor()
@@ -278,10 +283,7 @@ def get_hunting_channel(user_id):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            'SELECT channel_id FROM user_hunting_channels WHERE user_id = %s',
-            (user_id,)
-        )
+        cursor.execute('SELECT channel_id FROM user_hunting_channels WHERE user_id = %s', (user_id,))
         row = cursor.fetchone()
         return row[0] if row else None
     finally:
@@ -305,10 +307,7 @@ def get_user_countries(user_id):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            'SELECT country_name FROM user_countries WHERE user_id = %s',
-            (user_id,)
-        )
+        cursor.execute('SELECT country_name FROM user_countries WHERE user_id = %s', (user_id,))
         rows = cursor.fetchall()
         return [row[0] for row in rows] if rows else []
     finally:
@@ -343,170 +342,76 @@ def get_account_flood(account_id):
 def save_telegram_account(phone, api_id, api_hash, string_session):
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
-        INSERT INTO telegram_accounts
-        (phone, api_id, api_hash, string_session)
-
+        INSERT INTO telegram_accounts (phone, api_id, api_hash, string_session)
         VALUES (%s,%s,%s,%s)
-
-        ON CONFLICT (phone)
-
-        DO UPDATE SET
-
-        api_id=EXCLUDED.api_id,
-
-        api_hash=EXCLUDED.api_hash,
-
-        string_session=EXCLUDED.string_session,
-
-        status=1
-    """,(phone, api_id, api_hash, string_session))
-
+        ON CONFLICT (phone) DO UPDATE SET
+            api_id=EXCLUDED.api_id,
+            api_hash=EXCLUDED.api_hash,
+            string_session=EXCLUDED.string_session,
+            is_active = TRUE
+    """, (phone, api_id, api_hash, string_session))
     conn.commit()
-
     cursor.close()
-
     conn.close()
 
 def get_telegram_accounts():
+    """جلب كل حسابات الفحص (متوافقة مع النظام الجديد)"""
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
-        SELECT
-        id,
-        phone,
-        api_id,
-        api_hash,
-        string_session,
-        status,
-        flood_until,
-        total_checks,
-        last_used
-
+        SELECT id, phone, api_id, api_hash, string_session, is_active,
+               flood_until, total_checks, last_used
         FROM telegram_accounts
-
         ORDER BY id
     """)
-
     rows = cursor.fetchall()
-
     cursor.close()
-
     conn.close()
-
     return rows
 
 def delete_telegram_account(account_id):
     conn = get_connection()
     cursor = conn.cursor()
-
-    cursor.execute(
-        "DELETE FROM telegram_accounts WHERE id=%s",
-        (account_id,)
-    )
-
+    cursor.execute("DELETE FROM telegram_accounts WHERE id=%s", (account_id,))
     conn.commit()
-
     cursor.close()
-
     conn.close()
 
 def set_account_flood(account_id, flood_until):
     conn = get_connection()
     cursor = conn.cursor()
-
-    cursor.execute("""
-
-    UPDATE telegram_accounts
-
-    SET flood_until=%s
-
-    WHERE id=%s
-
-    """,(flood_until, account_id))
-
+    cursor.execute("UPDATE telegram_accounts SET flood_until=%s WHERE id=%s", (flood_until, account_id))
     conn.commit()
-
     cursor.close()
-
     conn.close()
 
 def increase_account_checks(account_id):
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
-
-    UPDATE telegram_accounts
-
-    SET
-
-    total_checks=total_checks+1,
-
-    last_used=CURRENT_TIMESTAMP
-
-    WHERE id=%s
-
-    """,(account_id,))
-
+        UPDATE telegram_accounts SET
+            total_checks = total_checks + 1,
+            last_used = CURRENT_TIMESTAMP
+        WHERE id = %s
+    """, (account_id,))
     conn.commit()
-
     cursor.close()
-
     conn.close()
 
 def get_best_telegram_account():
+    """اختيار أفضل حساب فحص نشط وغير محظور"""
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
-
-    SELECT
-
-    id,
-
-    phone,
-
-    api_id,
-
-    api_hash,
-
-    string_session
-
-    FROM telegram_accounts
-
-    WHERE
-
-    status=1
-
-    AND
-
-    (
-
-    flood_until IS NULL
-
-    OR
-
-    flood_until<CURRENT_TIMESTAMP
-
-    )
-
-    ORDER BY
-
-    total_checks ASC,
-
-    last_used ASC NULLS FIRST
-
-    LIMIT 1
-
+        SELECT id, phone, api_id, api_hash, string_session
+        FROM telegram_accounts
+        WHERE is_active = TRUE
+          AND (flood_until IS NULL OR flood_until < CURRENT_TIMESTAMP)
+        ORDER BY total_checks ASC, last_used ASC NULLS FIRST
+        LIMIT 1
     """)
-
     row = cursor.fetchone()
-
     cursor.close()
-
     conn.close()
-
     return row
