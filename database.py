@@ -232,6 +232,21 @@ def get_site_account(user_id):
         cursor.close()
         conn.close()
 
+def get_active_site_accounts(user_id):
+    """استرجاع جميع حسابات الموقع النشطة للمستخدم"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT username, api_key FROM user_site_accounts WHERE user_id = %s AND is_active = TRUE",
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        return rows  # list of (username, api_key)
+    finally:
+        cursor.close()
+        conn.close()
+
 # --- باقي الدوال (موجودة مسبقاً) ---
 def save_bot(user_id, token):
     conn = get_connection()
