@@ -202,8 +202,8 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         return
     elif data.startswith("toggle_site_"):
         acc_id = int(data.split("_")[2])
-        db.set_active_site_account(user_id, acc_id)
-        await query.answer("✅ تم تغيير الحساب النشط", show_alert=False)
+        db.toggle_site_account(user_id, acc_id)   # تغيير هنا
+        await query.answer("✅ تم تبديل حالة الحساب", show_alert=False)
         await show_manage_accounts(update, user_id)
         return
     elif data.startswith("delete_site_"):
