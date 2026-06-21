@@ -240,34 +240,37 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         await show_manage_countries(update, user_id)
         return
     elif data == "start_hunting":
-        account = db.get_site_account(user_id)
+        active_accounts = db.get_active_site_accounts(user_id)
         channel = db.get_hunting_channel(user_id)
         countries = db.get_user_countries(user_id)
-        if not account:
-            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى الانتقال إلى الإعدادات ➔ إدارة الحسابات وربط حسابك أولاً.")
+        if not active_accounts:
+            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يجب أن يكون لديك حساب نشط واحد على الأقل. انتقل إلى الإعدادات ➔ إدارة الحسابات.")
             return
         if not channel:
-            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى الانتقال إلى الإعدادات ➔ إضافة قناة الصيد وربط قناتك أولاً.")
+            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى إضافة قناة الصيد أولاً.")
             return
         if not countries:
-            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى تفعيل دولة واحدة على الأقل من خيار ‹ اضافه دوله ›.")
+            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى تفعيل دولة واحدة على الأقل.")
             return
-        username, api_key = account
-        balance = await DurianAPI.get_balance_by_name(username, api_key)
+        # عرض رصيد أول حساب نشط فقط للتمثيل
+        username_first = active_accounts[0][0]
+        api_key_first = active_accounts[0][1]
+        balance = await DurianAPI.get_balance_by_name(username_first, api_key_first)
         current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
         if current_jobs:
-            await query.message.reply_text("ℹ️ نظام الصيد والضخ لخدمة التليجرام يعمل بالفعل في قناتك الآن.")
+            await query.message.reply_text("ℹ️ الصيد يعمل بالفعل.")
             return
         context.job_queue.run_repeating(
             check_and_hunt_numbers, interval=5, first=1, user_id=user_id, name=f"hunt_{user_id}"
         )
         db.set_hunting_status(user_id, 1)
+        accounts_str = "\n".join([f"👤 {u}" for u, _ in active_accounts])
         await query.message.reply_text(
-            f"🚀 **تم تفعيل وضع صيد أرقام التليجرام بنجاح!**\n\n"
-            f"👤 الحساب النشط: `{username}`\n"
-            f"💰 رصيدك في الموقع: `{balance} Score`\n"
-            f"📢 قناة الصيد والضخ: `{channel}`\n\n"
-            f"🔄 بدأ البوت بالفحص الدوري للموقع، وسيتم سحب وضخ أرقام التليجرام الحصرية في قناتك فور توفرها كل 5 ثوانٍ تلقائياً..."
+            f"🚀 **تم تشغيل الصيد بعدة حسابات!**\n\n"
+            f"الحسابات النشطة:\n{accounts_str}\n"
+            f"💰 رصيد أول حساب: {balance} Score\n"
+            f"📢 القناة: {channel}\n\n"
+            f"سيتم سحب أرقام من جميع الحسابات المفعلة كل 5 ثوانٍ."
         )
     elif data == "stop_hunting":
         db.set_hunting_status(user_id, 0)
