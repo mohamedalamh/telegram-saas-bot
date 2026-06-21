@@ -174,7 +174,7 @@ def save_site_account_v2(user_id, username, api_key):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("UPDATE user_site_accounts SET is_active = FALSE WHERE user_id = %s", (user_id,))
+        # لم نعد نعطل الحسابات الأخرى، فقط نضيف/نحدث هذا الحساب ونجعله نشطًا
         cursor.execute("""
             INSERT INTO user_site_accounts (user_id, username, api_key, is_active)
             VALUES (%s, %s, %s, TRUE)
