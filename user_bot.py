@@ -199,6 +199,15 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
     elif data == "add_new_site_account":
         context.user_data["waiting_for_username"] = True
         await query.message.reply_text("📥 فضلاً، أرسل الآن **اسم المستخدم (Username)** الخاص بحسابك في موقع DurianRCS:")
+    elif data == "manage_countries":
+        await show_manage_countries(update, user_id)
+        return
+    elif data.startswith("delete_country_"):
+        country_code = data.split("_", 2)[-1]
+        db.delete_user_country(user_id, country_code)
+        await query.answer("🗑️ تم حذف الدولة", show_alert=False)
+        await show_manage_countries(update, user_id)
+        return
     elif data == "start_hunting":
         account = db.get_site_account(user_id)
         channel = db.get_hunting_channel(user_id)
@@ -314,28 +323,28 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         elif action == "weak":
             await query.answer("🧌 تم تصنيف جودة هذا النطاق كـ (ضعيفة) مؤقتاً بناءً على تقارير السحب.", show_alert=True)
 
+# ==================== 6. دالة عرض وإدارة الدول المختارة ====================
+async def show_manage_countries(update: Update, user_id: int):
+    countries = db.get_user_countries(user_id)
+    if not countries:
+        text = "🌍 **لم تقم بإضافة أي دولة بعد.**\n\nاستخدم زر 'اضافه دوله' لتفعيل الصيد من دول معينة."
+        keyboard = [[InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="main_menu")]]
+    else:
+        text = "🌍 **الدول المفعلة حاليًا:**\n\nاضغط على أي دولة لحذفها من قائمة الصيد."
+        keyboard = []
+        for code in countries:
+            # البحث عن اسم الدولة من القائمة الكاملة
+            country_name = code
+            for c in ALL_COUNTRIES:
+                if c["code"] == code:
+                    country_name = c["name"]
+                    break
+            keyboard.append([InlineKeyboardButton(f"🗑️ {country_name}", callback_data=f"delete_country_{code}")])
+        keyboard.append([InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="main_menu")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
-async def safe_check_phone(phone_number: str) -> str:
-    """
-    تنفيذ الفحص بطريقة آمنة تمامًا.
-    ترجع النص العربي للحالة (جاهز للإدراج في الرسالة).
-    في حال فشل الفحص لأي سبب، تعود بحالة 'غير معروف' مع تسجيل الخطأ.
-    """
-    try:
-        account_checker = await telegram_checker.get_available_account()
-        if not account_checker:
-            return "🟢 الرقم بدون جلسة"  # لا حسابات فحص متاحة، افترض أنه جديد
-
-        # تنفيذ الفحص
-        check_result = await telegram_checker.check_phone(account_checker, phone_number)
-        return check_result.get("status_text", "🟢 الرقم بدون جلسة")
-
-    except Exception as e:
-        # أي فشل في الفحص: لا نرمي الرقم، نبلغ بحالة مؤقتة ونسجل الخطأ
-        logger.warning(f"فشل فحص الرقم {phone_number}: {e}")
-        return "⚠️ غير معروف (فشل الفحص)"
-        
-# ==================== 6. دالة الصيد والضخ التلقائي في الخلفية المدمجة بالفحص المطور الفوري ====================
+# ==================== 7. دالة الصيد والضخ التلقائي في الخلفية المدمجة بالفحص المطور الفوري ====================
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.user_id
@@ -348,68 +357,69 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
         return
 
     username, api_key = account
-
-    for country_code in countries:
-        clean_country = str(country_code).strip()
-
-        try:
-            # --- المرحلة 1: جلب رقم خام ---
+    try:
+        for country_code in countries:
+            clean_country = str(country_code).strip()
+            
+            # سحب الرقم من الموقع
             result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
-            if not result or result.get("status") != "success":
-                continue  # لا رقم متاح لهذه الدولة، ننتقل للتالية
+            if result and result.get("status") == "success":
+                phone_number = result.get("number")
+                
+                # --- دمج نظام الفحص الفوري التلقائي ---
+                status_text = "🟢 الرقم بدون جلسة"
+                try:
+                    account_checker = await telegram_checker.get_available_account()
+                    if account_checker:
+                        check_result = await telegram_checker.check_phone(account_checker, phone_number)
+                        status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
+                except Exception:
+                    pass
 
-            phone_number = result.get("number")
-            if not phone_number:
-                continue
+                # التعرف التلقائي على علم واسم الدولة باللغة العربية بناءً على مقدمة الرقم الدولي
+                country_name = clean_country.upper()
+                country_flag = "🌐"
+                for prefix, info in COUNTRY_MAP.items():
+                    if phone_number.replace("+", "").startswith(prefix):
+                        country_name = info["name"]
+                        country_flag = info["emoji"]
+                        break
 
-            # --- المرحلة 2: الفحص الذكي (معزول بالكامل) ---
-            status_text = await safe_check_phone(phone_number)  # دالة مساعدة جديدة
+                # صياغة الكليشة الاحترافية
+                message_text = (
+                    f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
+                    f"- <b>الـرقم :</b> <code>{phone_number}</code>\n"
+                    f"- <b>الـدولـة :</b> {country_name} {country_flag}\n"
+                    f"- <b>الـحـالـة :</b> {status_text}\n"
+                    f"- <b>تكرار نزول الرقم :</b> 1 مرة\n"
+                    f"- <b>الـكـود :</b> ❗ قيد الإنتظار ❗"
+                )
 
-            # --- المرحلة 3: تجهيز الرسالة ---
-            country_name = clean_country.upper()
-            country_flag = "🌐"
-            for prefix, info in COUNTRY_MAP.items():
-                if phone_number.replace("+", "").startswith(prefix):
-                    country_name = info["name"]
-                    country_flag = info["emoji"]
-                    break
-
-            message_text = (
-                f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
-                f"- <b>الـرقم :</b> <code>{phone_number}</code>\n"
-                f"- <b>الـدولـة :</b> {country_name} {country_flag}\n"
-                f"- <b>الـحـالـة :</b> {status_text}\n"
-                f"- <b>تكرار نزول الرقم :</b> 1 مرة\n"
-                f"- <b>الـكـود :</b> ❗ قيد الإنتظار ❗"
-            )
-
-            keyboard = [
-                [
-                    InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{phone_number}"),
-                    InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{phone_number}")
-                ],
-                [
-                    InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{phone_number}"),
-                    InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
-                ],
-                [
-                    InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
+                # الأزرار الخمسة الشفافة
+                keyboard = [
+                    [
+                        InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{phone_number}"),
+                        InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{phone_number}")
+                    ],
+                    [
+                        InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{phone_number}"),
+                        InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
+                    ],
+                    [
+                        InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
+                    ]
                 ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+                reply_markup = InlineKeyboardMarkup(keyboard)
 
-            # --- المرحلة 4: الضخ للقناة ---
-            await context.bot.send_message(
-                chat_id=channel,
-                text=message_text,
-                parse_mode=ParseMode.HTML,
-                reply_markup=reply_markup
-            )
-
-        except Exception as outer_ex:
-            # شبكة الأمان النهائية: لا توقف الحلقة أبدًا، فقط سجل الخطأ وتابع
-            logger.error(f"استثناء غير متوقع في صيد المستخدم {user_id} للدولة {clean_country}: {outer_ex}", exc_info=True)
-            continue
+                # ضخ المنشور فوراً في قناة المستخدم
+                await context.bot.send_message(
+                    chat_id=channel,
+                    text=message_text,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup
+                )
+    except Exception as e:
+        logger.error(f"Error during hunting task for user {user_id}: {e}")
 
 def create_user_app(token: str):
     app = Application.builder().token(token).build()
