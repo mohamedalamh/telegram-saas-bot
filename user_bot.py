@@ -94,7 +94,7 @@ for c in ALL_COUNTRIES:
     emoji = parts[-1] if len(parts) > 1 else "🌐"
     name = " ".join(parts[:-1]) if len(parts) > 1 else c["name"]
     COUNTRY_INFO[code] = {"name": name, "emoji": emoji}
-# تحديث بعض الأسماء يدويًا لتكون كما تريد
+# تحديث بعض الأسماء يدويًا
 COUNTRY_INFO.update({
     "RU": {"name": "روسيا", "emoji": "🇷🇺"},
     "US": {"name": "أمريكا", "emoji": "🇺🇸"},
@@ -124,7 +124,7 @@ COUNTRY_INFO.update({
     "SD": {"name": "السودان", "emoji": "🇸🇩"},
 })
 
-# عداد مؤقت لتكرار نزول الرقم (لكل مستخدم ورقم)
+# عداد مؤقت لتكرار نزول الرقم
 repeat_tracker = {}
 
 # ==================== 1. القائمة الرئيسية ====================
@@ -199,7 +199,7 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if context.user_data.get("waiting_for_channel_id"):
         context.user_data.pop("waiting_for_channel_id", None)
-        db.save_hunting_channel(user_id, text)  # تم الإصلاح
+        db.save_hunting_channel(user_id, text)
         keyboard = [[InlineKeyboardButton("⬅️ العودة للإعدادات", callback_data="bot_settings")]]
         await update.message.reply_text(
             f"✅ **تم ربط قناة الصيد بنجاح!**\n\n🆔 معرف القناة المسجل: `{text}`\n\n"
@@ -244,7 +244,7 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         return
     elif data.startswith("toggle_site_"):
         acc_id = int(data.split("_")[2])
-        db.toggle_site_account(user_id, acc_id)   # استخدام الدالة الجديدة للتبديل المستقل
+        db.toggle_site_account(user_id, acc_id)
         await query.answer("✅ تم تبديل حالة الحساب", show_alert=False)
         await show_manage_accounts(update, user_id)
         return
@@ -359,8 +359,10 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             await query.answer("❌ لم تقم بربط حسابك بموقع الأرقام لإتمام الإجراء!", show_alert=True)
             return
         username, api_key = account
+
         if action == "code":
-            await query.answer("⏳ جاري سحب وتحديث كود التحقق من السيرفر...", show_alert=False)
+            # تنبيه فوري
+            await query.answer("⏳ جاري طلب الكود يرجى الانتظار", show_alert=True)
             sms_res = await DurianAPI.get_sms(username, api_key, phone)
             if sms_res["status"] == "success":
                 updated_text = query.message.text_html.replace("قـيـد الإنـتـظـار ❗️", f"<b>{sms_res['sms']}</b> ✅")
@@ -371,17 +373,19 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
                     pass
             else:
                 await query.answer(f"ℹ️ {sms_res['message']}", show_alert=True)
+
         elif action == "cancel":
             success = await DurianAPI.cancel_number(username, api_key, phone)
             if success:
-                updated_text = query.message.text_html.replace("قـيـد الإنـتـظـار ❗️", "<b>❌ تم إلغاء وتحرير الرقم بنجاح</b>")
+                # حذف الرسالة بالكامل من القناة
                 try:
-                    await query.message.edit_text(text=updated_text, reply_markup=None, parse_mode=ParseMode.HTML)
+                    await query.message.delete()
                 except Exception:
                     pass
-                await query.answer("🗑️ تم إلغاء الرقم بنجاح وتحرير رصيدك بالموقع.", show_alert=True)
+                await query.answer("🗑️ تم إلغاء الرقم بنجاح وحذفه من القناة.", show_alert=True)
             else:
                 await query.answer("❌ فشل إلغاء الرقم، ربما انتهى وقته الافتراضي أو تم تفعيله.", show_alert=True)
+
         elif action == "unban":
             await query.answer("⚙️ جاري إرسال طلب فك الحظر الفوري للرقم التابع لك إلى خوادم الدعم...", show_alert=True)
         elif action == "rate":
@@ -447,7 +451,6 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                     # --- تحديد الدولة والعلم ---
                     country_name = clean_country.upper()
                     country_flag = "🌐"
-                    # البحث في COUNTRY_MAP ثم في COUNTRY_INFO
                     found = False
                     for prefix, info in COUNTRY_MAP.items():
                         if clean_country.lower() == prefix.lower() or phone_number.replace("+", "").startswith(prefix):
@@ -464,8 +467,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                     repeat_tracker[user_id][phone_number] = repeat_tracker[user_id].get(phone_number, 0) + 1
                     repeat_count = repeat_tracker[user_id][phone_number]
 
-                    logger.warning(f"DEBUG NEW FORMAT: Using NEW code path for {phone_number}")
-                    # --- صياغة الرسالة الجديدة ---
+                    # --- صياغة الرسالة ---
                     message_text = (
                         f"🔰 تـم شـراء رقـم جـديـد مـن DurianRCS 🔰\n\n"
                         f"    - الـرقـــــم : <code>{phone_number}</code>\n"
