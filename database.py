@@ -196,12 +196,16 @@ def get_all_site_accounts(user_id):
         cursor.close()
         conn.close()
 
-def set_active_site_account(user_id, account_id):
+def toggle_site_account(user_id, account_id):
+    """تبديل حالة حساب واحد (نشط/غير نشط) دون التأثير على باقي الحسابات"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("UPDATE user_site_accounts SET is_active = FALSE WHERE user_id = %s", (user_id,))
-        cursor.execute("UPDATE user_site_accounts SET is_active = TRUE WHERE id = %s AND user_id = %s", (account_id, user_id))
+        cursor.execute("""
+            UPDATE user_site_accounts
+            SET is_active = NOT is_active
+            WHERE id = %s AND user_id = %s
+        """, (account_id, user_id))
         conn.commit()
     finally:
         cursor.close()
