@@ -234,6 +234,7 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     user_id = query.from_user.id
     data = query.data
+    logger.warning(f"CALLBACK RECEIVED: user={user_id}, data={data}")
 
     if data == "main_menu":
         await start_user_bot(update, context)
