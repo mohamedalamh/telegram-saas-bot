@@ -369,71 +369,74 @@ async def show_manage_countries(update: Update, user_id: int):
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.user_id
-    account = db.get_site_account(user_id)
+    active_accounts = db.get_active_site_accounts(user_id)
     channel = db.get_hunting_channel(user_id)
     countries = db.get_user_countries(user_id)
 
-    if not account or not channel or not countries:
+    if not active_accounts or not channel or not countries:
         job.schedule_removal()
         return
 
-    username, api_key = account
-    try:
+    for username, api_key in active_accounts:
         for country_code in countries:
             clean_country = str(country_code).strip()
-            result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
-            if result and result.get("status") == "success":
-                phone_number = result.get("number")
-                status_text = "🟢 الرقم بدون جلسة"
-                try:
-                    account_checker = await telegram_checker.get_available_account()
-                    if account_checker:
-                        check_result = await telegram_checker.check_phone(account_checker, phone_number)
-                        status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
-                except Exception:
-                    pass
+            try:
+                result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
+                if result and result.get("status") == "success":
+                    phone_number = result.get("number")
+                    # منطق الفحص يبقى كما هو
+                    status_text = "🟢 الرقم بدون جلسة"
+                    try:
+                        account_checker = await telegram_checker.get_available_account()
+                        if account_checker:
+                            check_result = await telegram_checker.check_phone(account_checker, phone_number)
+                            status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
+                    except Exception:
+                        pass
 
-                country_name = clean_country.upper()
-                country_flag = "🌐"
-                for prefix, info in COUNTRY_MAP.items():
-                    if phone_number.replace("+", "").startswith(prefix):
-                        country_name = info["name"]
-                        country_flag = info["emoji"]
-                        break
+                    country_name = clean_country.upper()
+                    country_flag = "🌐"
+                    for prefix, info in COUNTRY_MAP.items():
+                        if phone_number.replace("+", "").startswith(prefix):
+                            country_name = info["name"]
+                            country_flag = info["emoji"]
+                            break
 
-                message_text = (
-                    f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
-                    f"- <b>الـرقم :</b> <code>{phone_number}</code>\n"
-                    f"- <b>الـدولـة :</b> {country_name} {country_flag}\n"
-                    f"- <b>الـحـالـة :</b> {status_text}\n"
-                    f"- <b>تكرار نزول الرقم :</b> 1 مرة\n"
-                    f"- <b>الـكـود :</b> ❗ قيد الإنتظار ❗"
-                )
+                    message_text = (
+                        f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
+                        f"- <b>الـرقم :</b> <code>{phone_number}</code>\n"
+                        f"- <b>الـدولـة :</b> {country_name} {country_flag}\n"
+                        f"- <b>الـحـالـة :</b> {status_text}\n"
+                        f"- <b>الحساب المستخدم :</b> {username}\n"
+                        f"- <b>تكرار نزول الرقم :</b> 1 مرة\n"
+                        f"- <b>الـكـود :</b> ❗ قيد الإنتظار ❗"
+                    )
 
-                keyboard = [
-                    [
-                        InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{phone_number}"),
-                        InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{phone_number}")
-                    ],
-                    [
-                        InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{phone_number}"),
-                        InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
-                    ],
-                    [
-                        InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
+                    keyboard = [
+                        [
+                            InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{phone_number}"),
+                            InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{phone_number}")
+                        ],
+                        [
+                            InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{phone_number}"),
+                            InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
+                        ],
+                        [
+                            InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
+                        ]
                     ]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                    reply_markup = InlineKeyboardMarkup(keyboard)
 
-                await context.bot.send_message(
-                    chat_id=channel,
-                    text=message_text,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=reply_markup
-                )
-    except Exception as e:
-        logger.error(f"Error during hunting task for user {user_id}: {e}")
-
+                    await context.bot.send_message(
+                        chat_id=channel,
+                        text=message_text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=reply_markup
+                    )
+            except Exception as e:
+                logger.error(f"Error for user {user_id}, account {username}: {e}")
+                continue  # ينتقل للدولة التالية أو الحساب التالي
+                
 def create_user_app(token: str):
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start_user_bot))
