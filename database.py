@@ -327,6 +327,16 @@ def add_user_country(user_id, country_name):
     finally:
         cursor.close()
         conn.close()
+        
+def delete_user_country(user_id, country_name):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM user_countries WHERE user_id = %s AND country_name = %s", (user_id, country_name))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
 
 def get_account_flood(account_id):
     conn = get_connection()
