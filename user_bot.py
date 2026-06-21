@@ -10,6 +10,7 @@ from telegram_checker.checker import telegram_checker
 
 logger = logging.getLogger(__name__)
 
+# ---------- خرائط الدول والأعلام ----------
 COUNTRY_MAP = {
     "679": {"name": "فيجي", "emoji": "🇫🇯"},
     "33": {"name": "فرنسا", "emoji": "🇫🇷"},
@@ -36,7 +37,7 @@ ALL_COUNTRIES = [
     {"name": "تركيا 🇹🇷", "code": "tr"}, {"name": "ألمانيا 🇩🇪", "code": "de"},
     {"name": "فرنسا 🇫🇷", "code": "fr"}, {"name": "إسبانيا 🇪🇸", "code": "es"},
     {"name": "إيطاليا 🇮🇹", "code": "it"}, {"name": "كندا 🇨🇦", "code": "ca"},
-    {"name": "أسترايا 🇦🇺", "code": "au"}, {"name": "الصين 🇨🇳", "code": "cn"},
+    {"name": "أستراليا 🇦🇺", "code": "au"}, {"name": "الصين 🇨🇳", "code": "cn"},
     {"name": "اليابان 🇯🇵", "code": "jp"}, {"name": "كوريا 🇰🇷", "code": "kr"},
     {"name": "فيتنام 🇻🇳", "code": "vn"}, {"name": "تايلاند 🇹🇭", "code": "th"},
     {"name": "ماليزيا 🇲🇾", "code": "my"}, {"name": "الفلبين 🇵🇭", "code": "ph"},
@@ -85,6 +86,47 @@ ALL_COUNTRIES = [
     {"name": "بوتان 🇧🇹", "code": "bt"}
 ]
 
+# قاموس مساعد لاستخراج اسم الدولة والإيموجي من الكود
+COUNTRY_INFO = {}
+for c in ALL_COUNTRIES:
+    code = c["code"].upper()
+    parts = c["name"].split(" ")
+    emoji = parts[-1] if len(parts) > 1 else "🌐"
+    name = " ".join(parts[:-1]) if len(parts) > 1 else c["name"]
+    COUNTRY_INFO[code] = {"name": name, "emoji": emoji}
+# تحديث بعض الأسماء يدويًا لتكون كما تريد
+COUNTRY_INFO.update({
+    "RU": {"name": "روسيا", "emoji": "🇷🇺"},
+    "US": {"name": "أمريكا", "emoji": "🇺🇸"},
+    "EG": {"name": "مصر", "emoji": "🇪🇬"},
+    "SY": {"name": "سوريا", "emoji": "🇸🇾"},
+    "IQ": {"name": "العراق", "emoji": "🇮🇶"},
+    "SA": {"name": "السعودية", "emoji": "🇸🇦"},
+    "AE": {"name": "الإمارات", "emoji": "🇦🇪"},
+    "KW": {"name": "الكويت", "emoji": "🇰🇼"},
+    "BH": {"name": "البحرين", "emoji": "🇧🇭"},
+    "OM": {"name": "عمان", "emoji": "🇴🇲"},
+    "QA": {"name": "قطر", "emoji": "🇶🇦"},
+    "YE": {"name": "اليمن", "emoji": "🇾🇪"},
+    "PS": {"name": "فلسطين", "emoji": "🇵🇸"},
+    "LB": {"name": "لبنان", "emoji": "🇱🇧"},
+    "JO": {"name": "الأردن", "emoji": "🇯🇴"},
+    "TR": {"name": "تركيا", "emoji": "🇹🇷"},
+    "DE": {"name": "ألمانيا", "emoji": "🇩🇪"},
+    "FR": {"name": "فرنسا", "emoji": "🇫🇷"},
+    "GB": {"name": "بريطانيا", "emoji": "🇬🇧"},
+    "IN": {"name": "الهند", "emoji": "🇮🇳"},
+    "BR": {"name": "البرازيل", "emoji": "🇧🇷"},
+    "MA": {"name": "المغرب", "emoji": "🇲🇦"},
+    "DZ": {"name": "الجزائر", "emoji": "🇩🇿"},
+    "TN": {"name": "تونس", "emoji": "🇹🇳"},
+    "LY": {"name": "ليبيا", "emoji": "🇱🇾"},
+    "SD": {"name": "السودان", "emoji": "🇸🇩"},
+})
+
+# عداد مؤقت لتكرار نزول الرقم (لكل مستخدم ورقم)
+repeat_tracker = {}
+
 # ==================== 1. القائمة الرئيسية ====================
 async def start_user_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "🔰 مرحباً بك في بوت صيد الأرقام 🔰\n\nاختر أحد الخيارات أدناه للبدء:"
@@ -121,7 +163,7 @@ async def show_settings(update: Update, user_id: int):
 
 # ==================== 3. إدارة الحسابات ====================
 async def show_manage_accounts(update: Update, user_id: int):
-    """عرض جميع حسابات DurianRCS مع تحكم كامل"""
+    """عرض جميع حسابات DurianRCS مع تحكم كامل (تفعيل/تعطيل/حذف)"""
     accounts = db.get_all_site_accounts(user_id)
     if not accounts:
         text = "👤 **إدارة الحسابات:**\n\nلا توجد حسابات مضافة. أضف حسابًا للبدء."
@@ -130,7 +172,7 @@ async def show_manage_accounts(update: Update, user_id: int):
             [InlineKeyboardButton("‹ رجوع ›", callback_data="bot_settings")]
         ]
     else:
-        text = "👤 **إدارة الحسابات:**\n\nالحساب النشط (🟢) هو المستخدم في الصيد. اضغط على 'تفعيل' لتغييره."
+        text = "👤 **إدارة الحسابات:**\n\nالحساب النشط (🟢) سيُستخدم في الصيد. اضغط على 'تفعيل' أو 'تعطيل' للتحكم بكل حساب على حدة."
         keyboard = []
         for acc_id, username, api_key, is_active in accounts:
             status_icon = "🟢" if is_active else "⚪"
@@ -148,7 +190,7 @@ async def show_manage_accounts(update: Update, user_id: int):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.callback_query.message.edit_text(text, reply_markup=reply_markup)
 
-# ==================== 4. معالجة الإدخالات النصية الشاملة ====================
+# ==================== 4. معالجة الإدخالات النصية ====================
 async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user:
         return
@@ -157,7 +199,7 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if context.user_data.get("waiting_for_channel_id"):
         context.user_data.pop("waiting_for_channel_id", None)
-        db.save_hunting_channel(user_id, text)
+        db.save_hunting_channel(user_id, text)  # تم الإصلاح
         keyboard = [[InlineKeyboardButton("⬅️ العودة للإعدادات", callback_data="bot_settings")]]
         await update.message.reply_text(
             f"✅ **تم ربط قناة الصيد بنجاح!**\n\n🆔 معرف القناة المسجل: `{text}`\n\n"
@@ -177,7 +219,7 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
         api_key = text
         context.user_data.pop("waiting_for_apikey", None)
         context.user_data.pop("temp_username", None)
-        db.save_site_account_v2(user_id, username, api_key)  # استخدام الدالة الجديدة
+        db.save_site_account_v2(user_id, username, api_key)
         keyboard = [[InlineKeyboardButton("⬅️ العودة لإدارة الحسابات", callback_data="manage_accounts")]]
         await update.message.reply_text(
             f"✅ تم إضافة الحساب بنجاح وتفعيله!\n\n👤 اسم المستخدم: `{username}`\n🔑 الـ API Key تم حفظه.",
@@ -186,7 +228,7 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
-# ==================== 5. معالج الأحداث والأزرار الشامل ====================
+# ==================== 5. معالج الأحداث والأزرار ====================
 async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -202,7 +244,7 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         return
     elif data.startswith("toggle_site_"):
         acc_id = int(data.split("_")[2])
-        db.toggle_site_account(user_id, acc_id)   # تغيير هنا
+        db.toggle_site_account(user_id, acc_id)   # استخدام الدالة الجديدة للتبديل المستقل
         await query.answer("✅ تم تبديل حالة الحساب", show_alert=False)
         await show_manage_accounts(update, user_id)
         return
@@ -252,7 +294,6 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         if not countries:
             await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى تفعيل دولة واحدة على الأقل.")
             return
-        # عرض رصيد أول حساب نشط فقط للتمثيل
         username_first = active_accounts[0][0]
         api_key_first = active_accounts[0][1]
         balance = await DurianAPI.get_balance_by_name(username_first, api_key_first)
@@ -322,7 +363,7 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             await query.answer("⏳ جاري سحب وتحديث كود التحقق من السيرفر...", show_alert=False)
             sms_res = await DurianAPI.get_sms(username, api_key, phone)
             if sms_res["status"] == "success":
-                updated_text = query.message.text_html.replace("قيد الإنتظار ❗️", f"<b>{sms_res['sms']}</b> ✅")
+                updated_text = query.message.text_html.replace("قـيـد الإنـتـظـار ❗️", f"<b>{sms_res['sms']}</b> ✅")
                 try:
                     await query.message.edit_text(text=updated_text, reply_markup=query.message.reply_markup, parse_mode=ParseMode.HTML)
                     await query.message.reply_text(f"📥 <b>وصول كود جديد للرقم</b> <code>{phone}</code> :\n<code>{sms_res['sms']}</code>", parse_mode=ParseMode.HTML)
@@ -333,7 +374,7 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         elif action == "cancel":
             success = await DurianAPI.cancel_number(username, api_key, phone)
             if success:
-                updated_text = query.message.text_html.replace("قيد الإنتظار ❗️", "<b>❌ تم إلغاء وتحرير الرقم بنجاح</b>")
+                updated_text = query.message.text_html.replace("قـيـد الإنـتـظـار ❗️", "<b>❌ تم إلغاء وتحرير الرقم بنجاح</b>")
                 try:
                     await query.message.edit_text(text=updated_text, reply_markup=None, parse_mode=ParseMode.HTML)
                 except Exception:
@@ -368,7 +409,7 @@ async def show_manage_countries(update: Update, user_id: int):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
-# ==================== 7. دالة الصيد والضخ ====================
+# ==================== 7. دالة الصيد والضخ (الشكل الجديد) ====================
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.user_id
@@ -380,6 +421,9 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
         job.schedule_removal()
         return
 
+    if user_id not in repeat_tracker:
+        repeat_tracker[user_id] = {}
+
     for username, api_key in active_accounts:
         for country_code in countries:
             clean_country = str(country_code).strip()
@@ -387,32 +431,47 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
                 if result and result.get("status") == "success":
                     phone_number = result.get("number")
-                    # منطق الفحص يبقى كما هو
-                    status_text = "🟢 الرقم بدون جلسة"
+
+                    # --- الفحص ---
+                    status_text = "✅ الرقم بدون جلسة"
                     try:
                         account_checker = await telegram_checker.get_available_account()
                         if account_checker:
                             check_result = await telegram_checker.check_phone(account_checker, phone_number)
-                            status_text = check_result.get("status_text", "🟢 الرقم بدون جلسة")
+                            raw_status = check_result.get("status_text", "")
+                            if "HAS_SESSION" in raw_status or "محظور" in raw_status:
+                                status_text = f"⚠️ {raw_status}"
                     except Exception:
                         pass
 
+                    # --- تحديد الدولة والعلم ---
                     country_name = clean_country.upper()
                     country_flag = "🌐"
+                    # البحث في COUNTRY_MAP ثم في COUNTRY_INFO
+                    found = False
                     for prefix, info in COUNTRY_MAP.items():
-                        if phone_number.replace("+", "").startswith(prefix):
+                        if clean_country.lower() == prefix.lower() or phone_number.replace("+", "").startswith(prefix):
                             country_name = info["name"]
                             country_flag = info["emoji"]
+                            found = True
                             break
+                    if not found and clean_country.upper() in COUNTRY_INFO:
+                        info = COUNTRY_INFO[clean_country.upper()]
+                        country_name = info["name"]
+                        country_flag = info["emoji"]
 
+                    # --- تحديث عداد التكرار ---
+                    repeat_tracker[user_id][phone_number] = repeat_tracker[user_id].get(phone_number, 0) + 1
+                    repeat_count = repeat_tracker[user_id][phone_number]
+
+                    # --- صياغة الرسالة الجديدة ---
                     message_text = (
-                        f"🔰 <b>تم شراء رقم جديد من DurianRCS</b> 🔰\n\n"
-                        f"- <b>الـرقم :</b> <code>{phone_number}</code>\n"
-                        f"- <b>الـدولـة :</b> {country_name} {country_flag}\n"
-                        f"- <b>الـحـالـة :</b> {status_text}\n"
-                        f"- <b>الحساب المستخدم :</b> {username}\n"
-                        f"- <b>تكرار نزول الرقم :</b> 1 مرة\n"
-                        f"- <b>الـكـود :</b> ❗ قيد الإنتظار ❗"
+                        f"🔰 تـم شـراء رقـم جـديـد مـن DurianRCS 🔰\n\n"
+                        f"    - الـرقـــــم : <code>{phone_number}</code>\n"
+                        f"    - الـدولـة : {country_name} {country_flag}\n"
+                        f"    - الـحـالـة : {status_text}\n"
+                        f"    - تـكـرار نـزول الـرقـم : {repeat_count} مـرة\n"
+                        f"    - الــكـــود : قـيـد الإنـتـظـار ❗️"
                     )
 
                     keyboard = [
@@ -438,8 +497,8 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                     )
             except Exception as e:
                 logger.error(f"Error for user {user_id}, account {username}: {e}")
-                continue  # ينتقل للدولة التالية أو الحساب التالي
-                
+                continue
+
 def create_user_app(token: str):
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start_user_bot))
