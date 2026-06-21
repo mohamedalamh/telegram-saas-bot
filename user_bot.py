@@ -464,6 +464,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                     repeat_tracker[user_id][phone_number] = repeat_tracker[user_id].get(phone_number, 0) + 1
                     repeat_count = repeat_tracker[user_id][phone_number]
 
+                    logger.warning(f"DEBUG NEW FORMAT: Using NEW code path for {phone_number}")
                     # --- صياغة الرسالة الجديدة ---
                     message_text = (
                         f"🔰 تـم شـراء رقـم جـديـد مـن DurianRCS 🔰\n\n"
