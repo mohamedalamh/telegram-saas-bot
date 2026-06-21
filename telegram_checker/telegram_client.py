@@ -1,7 +1,10 @@
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.errors import FloodWaitError
-import asyncio
+
+
+class SessionUnauthorizedError(Exception):
+    """Raised when the Telegram session is not authorized."""
+    pass
 
 
 class TelegramClientManager:
@@ -11,10 +14,10 @@ class TelegramClientManager:
     async def get_client(self, account):
         """
         account = {
-            "id":1,
-            "api_id":12345,
-            "api_hash":"xxxxx",
-            "session":"xxxxx"
+            "id": 1,
+            "api_id": 12345,
+            "api_hash": "xxxxx",
+            "session": "xxxxx"
         }
         """
 
@@ -23,15 +26,12 @@ class TelegramClientManager:
         if account_id in self.clients:
             client = self.clients[account_id]
 
-            if await client.is_user_authorized():
-                return client
-
             try:
-                await client.connect()
+                if not client.is_connected():
+                    await client.connect()
 
                 if await client.is_user_authorized():
                     return client
-
             except Exception:
                 pass
 
@@ -44,35 +44,30 @@ class TelegramClientManager:
         await client.connect()
 
         if not await client.is_user_authorized():
-            raise SessionUnauthorizedError("Telegram session is not authorized.")
+            await client.disconnect()
+            raise SessionUnauthorizedError(
+                "Telegram session is not authorized."
+            )
 
         self.clients[account_id] = client
-
         return client
 
     async def disconnect_client(self, account_id):
-        if account_id not in self.clients:
+        client = self.clients.pop(account_id, None)
+
+        if client is None:
             return
 
         try:
-            await self.clients[account_id].disconnect()
+            await client.disconnect()
         except Exception:
             pass
 
-        self.clients.pop(account_id, None)
-
     async def disconnect_all(self):
-        for account_id in list(self.clients.keys()):
+        for client in list(self.clients.values()):
             try:
-                await self.clients[account_id].disconnect()
+                await client.disconnect()
             except Exception:
-                pass
-
-        self.clients.clear()
-
-
-telegram_client_manager = TelegramClientManager()
- except Exception:
                 pass
 
         self.clients.clear()
