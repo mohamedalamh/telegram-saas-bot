@@ -453,21 +453,3 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
-oken))
-    
-    await main_app.initialize()
-    await main_app.updater.start_polling()
-    await main_app.start()
-    
-    asyncio.create_task(safe_restore())
-    
-    try:
-        while True:
-            await asyncio.sleep(3600)
-    except (KeyboardInterrupt, SystemExit):
-        await main_app.updater.stop()
-        await main_app.stop()
-        await main_app.shutdown()
-
-if __name__ == '__main__':
-    asyncio.run(main())
