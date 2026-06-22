@@ -231,11 +231,12 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # ==================== 5. معالج الأحداث والأزرار ====================
 async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    # لا نرد هنا فارغًا! سنرد في كل إجراء لمرة واحدة فقط
     user_id = query.from_user.id
     data = query.data
     logger.warning(f"CALLBACK RECEIVED: user={user_id}, data={data}")
 
+    # الأزرار العامة
     if data == "main_menu":
         await start_user_bot(update, context)
     elif data == "bot_settings":
@@ -353,46 +354,80 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         db.add_user_country(user_id, country_code)
         await query.message.reply_text(f"🟢 تم إضافة وتفعيل دولة **{country_name}** بنجاح لتفعيل التليجرام!")
         await start_user_bot(update, context)
+    # ------------- معالجة أزرار الأرقام -------------
     elif data.startswith(("code_", "unban_", "cancel_", "rate_", "weak_")):
-        action, phone = data.split("_", 1)
-        account = db.get_site_account(user_id)
-        if not account:
-            await query.answer("❌ لم تقم بربط حسابك بموقع الأرقام لإتمام الإجراء!", show_alert=True)
+        # الصيغة الجديدة: action_username_phone
+        parts = data.split("_", 2)
+        if len(parts) < 3:
+            # الصيغة القديمة (بدون username) موجودة في رسائل سابقة؛ نعطي تنبيه
+            await safe_answer(query, "⚠️ هذه الأزرار القديمة غير مدعومة، انتظر أرقاماً جديدة.", show_alert=True)
             return
-        username, api_key = account
+        action = parts[0]
+        username = parts[1]
+        phone = parts[2]
+
+        # جلب api_key لهذا الحساب من قاعدة بيانات المستخدم
+        accounts = db.get_all_site_accounts(user_id)
+        api_key = None
+        for acc_id, acc_username, acc_api_key, _ in accounts:
+            if acc_username == username:
+                api_key = acc_api_key
+                break
+        if not api_key:
+            await safe_answer(query, "❌ الحساب المرتبط بهذا الرقم غير موجود!", show_alert=True)
+            return
 
         if action == "code":
-            # تنبيه فوري
-            await query.answer("⏳ جاري طلب الكود يرجى الانتظار", show_alert=True)
-            sms_res = await DurianAPI.get_sms(username, api_key, phone)
-            if sms_res["status"] == "success":
-                updated_text = query.message.text_html.replace("قـيـد الإنـتـظـار ❗️", f"<b>{sms_res['sms']}</b> ✅")
-                try:
-                    await query.message.edit_text(text=updated_text, reply_markup=query.message.reply_markup, parse_mode=ParseMode.HTML)
-                    await query.message.reply_text(f"📥 <b>وصول كود جديد للرقم</b> <code>{phone}</code> :\n<code>{sms_res['sms']}</code>", parse_mode=ParseMode.HTML)
-                except Exception:
-                    pass
-            else:
-                await query.answer(f"ℹ️ {sms_res['message']}", show_alert=True)
+            # رد واحد فوري مع تنبيه "جاري طلب الكود"
+            await safe_answer(query, "⏳ جاري طلب الكود يرجى الانتظار", show_alert=True)
+            try:
+                sms_res = await DurianAPI.get_sms(username, api_key, phone)
+                if sms_res["status"] == "success":
+                    updated_text = query.message.text_html.replace("قـيـد الإنـتـظـار ❗️", f"<b>{sms_res['sms']}</b> ✅")
+                    try:
+                        await query.message.edit_text(text=updated_text, reply_markup=query.message.reply_markup, parse_mode=ParseMode.HTML)
+                        await query.message.reply_text(f"📥 <b>وصول كود جديد للرقم</b> <code>{phone}</code> :\n<code>{sms_res['sms']}</code>", parse_mode=ParseMode.HTML)
+                    except Exception:
+                        pass
+                else:
+                    # فشل جلب الكود، نرسل رسالة جديدة بدلاً من تعديل التنبيه (لأننا لا نستطيع الرد مرتين)
+                    await query.message.reply_text(f"ℹ️ {sms_res['message']}")
+            except Exception as e:
+                logger.error(f"Error fetching SMS for {phone}: {e}")
+                await query.message.reply_text("❌ فشل جلب الكود، حاول لاحقًا.")
 
         elif action == "cancel":
-            success = await DurianAPI.cancel_number(username, api_key, phone)
-            if success:
-                # حذف الرسالة بالكامل من القناة
-                try:
-                    await query.message.delete()
-                except Exception:
-                    pass
-                await query.answer("🗑️ تم إلغاء الرقم بنجاح وحذفه من القناة.", show_alert=True)
-            else:
-                await query.answer("❌ فشل إلغاء الرقم، ربما انتهى وقته الافتراضي أو تم تفعيله.", show_alert=True)
+            # إلغاء الرقم
+            try:
+                success = await DurianAPI.cancel_number(username, api_key, phone)
+                if success:
+                    # حذف الرسالة من القناة
+                    try:
+                        await query.message.delete()
+                    except Exception:
+                        pass
+                    await safe_answer(query, "🗑️ تم إلغاء الرقم بنجاح وحذفه من القناة.", show_alert=True)
+                else:
+                    await safe_answer(query, "❌ فشل إلغاء الرقم، ربما انتهى وقته أو تم تفعيله.", show_alert=True)
+            except Exception as e:
+                logger.error(f"Error cancelling number {phone}: {e}")
+                await safe_answer(query, "❌ خطأ في الإلغاء", show_alert=True)
 
         elif action == "unban":
-            await query.answer("⚙️ جاري إرسال طلب فك الحظر الفوري للرقم التابع لك إلى خوادم الدعم...", show_alert=True)
+            await safe_answer(query, "⚙️ جاري إرسال طلب فك الحظر...", show_alert=True)
+
         elif action == "rate":
-            await query.answer("📊 نسبة وصول الأكواد الحالية لهذا النطاق هي: 94%", show_alert=True)
+            await safe_answer(query, "📊 نسبة وصول الأكواد الحالية لهذا النطاق هي: 94%", show_alert=True)
+
         elif action == "weak":
-            await query.answer("🧌 تم تصنيف جودة هذا النطاق كـ (ضعيفة) مؤقتاً بناءً على تقارير السحب.", show_alert=True)
+            await safe_answer(query, "🧌 تم تصنيف جودة هذا النطاق كـ (ضعيفة) مؤقتاً.", show_alert=True)
+
+# دالة مساعدة للرد الآمن
+async def safe_answer(query, text=None, show_alert=False):
+    try:
+        await query.answer(text=text, show_alert=show_alert)
+    except Exception as e:
+        logger.warning(f"Failed to answer callback query: {e}")
 
 # ==================== 6. عرض وإدارة الدول المختارة ====================
 async def show_manage_countries(update: Update, user_id: int):
