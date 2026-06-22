@@ -295,10 +295,11 @@ async def get_code_and_verify(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text("⏳ جاري التحقق من كود تسجيل الدخول...")
     try:
         result = await login_manager.verify_code(phone, code)
+        if result.get("status") == "CODE_EXPIRED":
+            await update.message.reply_text("⏳ انتهت صلاحية الكود. تم إرسال كود جديد إلى رقمك. أرسل الكود الجديد:")
+            return CODE  # يبقى في نفس حالة انتظار الكود
         if result.get("status") == "PASSWORD_REQUIRED":
-            await update.message.reply_text("🔒 هذا الحساب محمي بالتحقق بخطوتين، من فضلك أرسل باسوورد الحساب الآن:")
-            logger.info("[TRACE] State returned: PASSWORD")
-            return PASSWORD
+            ...
         if result.get("status") == "SUCCESS":
             await update.message.reply_text(f"✅ تم ربط الحساب الفاحص بنجاح!\n👤 الاسم: {result.get('name')}")
             await login_manager.cleanup()
