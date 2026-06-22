@@ -462,4 +462,73 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
         for country_code in countries:
             clean_country = str(country_code).strip()
             try:
-                result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project
+                result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
+                if result and result.get("status") == "success":
+                    phone_number = result.get("number")
+
+                    # --- الفحص ---
+                    status_text = "✅ الرقم بدون جلسة"
+                    try:
+                        account_checker = await telegram_checker.get_available_account()
+                        if account_checker:
+                            check_result = await telegram_checker.check_phone(account_checker, phone_number)
+                            raw_status = check_result.get("status_text", "")
+                            if "HAS_SESSION" in raw_status or "محظور" in raw_status:
+                                status_text = f"⚠️ {raw_status}"
+                    except Exception:
+                        pass
+
+                    # --- تحديد الدولة والعلم ---
+                    country_name = clean_country.upper()
+                    country_flag = "🌐"
+                    found = False
+                    for prefix, info in COUNTRY_MAP.items():
+                        if clean_country.lower() == prefix.lower() or phone_number.replace("+", "").startswith(prefix):
+                            country_name = info["name"]
+                            country_flag = info["emoji"]
+                            found = True
+                            break
+                    if not found and clean_country.upper() in COUNTRY_INFO:
+                        info = COUNTRY_INFO[clean_country.upper()]
+                        country_name = info["name"]
+                        country_flag = info["emoji"]
+
+                    # --- تحديث عداد التكرار ---
+                    repeat_tracker[user_id][phone_number] = repeat_tracker[user_id].get(phone_number, 0) + 1
+                    repeat_count = repeat_tracker[user_id][phone_number]
+
+                    # --- صياغة الرسالة ---
+                    message_text = (
+                        f"🔰 تـم شـراء رقـم جـديـد مـن DurianRCS 🔰\n\n"
+                        f"    - الـرقـــــم : <code>{phone_number}</code>\n"
+                        f"    - الـدولـة : {country_name} {country_flag}\n"
+                        f"    - الـحـالـة : {status_text}\n"
+                        f"    - تـكـرار نـزول الـرقـم : {repeat_count} مـرة\n"
+                        f"    - الــكـــود : قـيـد الإنـتـظـار ❗️"
+                    )
+
+                    keyboard = [
+                        [
+                            InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{username}_{phone_number}"),
+                            InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{username}_{phone_number}")
+                        ],
+                        [
+                            InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{username}_{phone_number}"),
+                            InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{username}_{phone_number}")
+                        ],
+                        [
+                            InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{username}_{phone_number}")
+                        ]
+                    ]
+                    
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+
+                    await context.bot.send_message(
+                        chat_id=channel,
+                        text=message_text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=reply_markup
+                    )
+            except Exception as e:
+                logger.error(f"Error for user {user_id}, account {username}: {e}")
+                continue
