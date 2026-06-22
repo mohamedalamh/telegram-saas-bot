@@ -128,7 +128,7 @@ repeat_tracker = {}
 # معرف مالك البوت (يتم تخزينه عند بدء الصيد)
 bot_owner_id = None
 
-MAX_CONCURRENT_REQUESTS = 10
+MAX_CONCURRENT_REQUESTS = 1
 semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 # ==================== 1. القائمة الرئيسية ====================
 async def start_user_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -466,6 +466,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
         clean_country = str(country_code).strip()
         try:
             async with semaphore:
+               await asyncio.sleep(1.5) 
                 result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
             if not result or result.get("status") != "success":
                 return
