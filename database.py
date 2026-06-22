@@ -421,6 +421,15 @@ def get_all_checkers():
     conn.close()
     return rows
 
+def delete_checker(account_id):
+    """حذف حساب فاحص نهائيًا من قاعدة البيانات"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM telegram_accounts WHERE id = %s", (account_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 def toggle_checker(account_id):
     conn = get_connection()
     cursor = conn.cursor()
