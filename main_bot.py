@@ -400,7 +400,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
         # زر تأكيد الدفع (للأدمن فقط)
-        elif query.data.startswith("confirm_pay_"):
+        elif query.data.startswith("confirm_pay_")::
             if user_id != ADMIN_ID:
                 await query.answer("غير مصرح", show_alert=True)
                 return
@@ -424,13 +424,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"⏰ ❛ الأيام المضافة ≽ 30 يوم ≼\n"
                     f"⏰ ❛ اشتراكك الجديد ينتهي في ≽ {expiry_str} ≼"
                 )
-              try:
+                try:
                     await context.bot.send_message(chat_id=target_id, text=success_msg)
                 except Exception as e:
                     logger.error(f"فشل إرسال رسالة نجاح الدفع للمستخدم {target_id}: {e}")
                     await query.answer("تم تأكيد الدفع ولكن تعذر إرسال إشعار للمستخدم.", show_alert=True)
                     return
-                await query.answer("تم تأكيد الدفع وإرسال الإشعار.", show_alert=True)  
+                await query.answer("تم تأكيد الدفع وإرسال الإشعار.", show_alert=True)
             else:
                 await query.answer("المستخدم غير موجود.", show_alert=True)
             await query.message.edit_text(query.message.text + "\n\n✅ تم التأكيد.")
