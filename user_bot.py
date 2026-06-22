@@ -314,20 +314,20 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         )
         db.set_hunting_status(user_id, 1)
         accounts_str = "\n".join([f"👤 {u}" for u, _ in active_accounts])
-        await query.message.reply_text(
-            f"🚀 **تم تشغيل الصيد بعدة حسابات!**\n\n"
-            f"الحسابات النشطة:\n{accounts_str}\n"
-            f"💰 رصيد أول حساب: {balance} Score\n"
-            f"📢 القناة: {channel}\n\n"
-            f"سيتم سحب أرقام من جميع الحسابات المفعلة كل 5 ثوانٍ."
+        # تنبيه منبثق بنجاح التشغيل
+        await query.answer(
+            f"🚀 تم تشغيل الصيد بنجاح!\nالحسابات: {', '.join([u for u, _ in active_accounts])}\nالقناة: {channel}",
+            show_alert=True
         )
+        # (اختياري) رسالة نصية مختصرة للتأكيد، يمكن حذفها إن أردت
+        await query.message.reply_text("✅ تم تشغيل الصيد.")
     elif data == "stop_hunting":
         db.set_hunting_status(user_id, 0)
         current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
         if current_jobs:
             for job in current_jobs:
                 job.schedule_removal()
-        await query.message.reply_text("🛑 تم إيقاف عملية صيد وضخ أرقام التليجرام التلقائية بنجاح.")
+        await query.answer("🛑 تم إيقاف الصيد بنجاح.", show_alert=True)
     elif data.startswith("add_country_page_"):
         page = int(data.split("_")[-1])
         items_per_page = 8
