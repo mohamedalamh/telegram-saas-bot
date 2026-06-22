@@ -463,8 +463,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         amount = crypto_prices[plan_num][method]
         wallets = {
-            "USDT": "TYourUSDTAddressHere",
-            "TRX": "TSDqje1oWAcDY8Q5XzUDLWksWMSPqxv3PB",
+            "USDT": "864428425",
+            "TRX": "TCNZsLwJqUNhudt7XtC6XBLnWvKpKVLu61",
         }
         wallet = wallets[method]
         currency = "USDT" if method == "usdt" else "TRX"
