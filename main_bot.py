@@ -484,7 +484,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"<code>{wallet}</code>\n\n"
             f"✅ سيتم تفعيل الاشتراك فورًا بعد وصول {amount} {currency}"
         )
-        await query.message.edit_text(text, parse_mode="HTML")
+        try:
+            await query.message.edit_text(text, parse_mode="HTML")
+        except Exception as e:
+            logger.warning(f"فشل تحرير رسالة الدفع، سيتم إرسال رسالة جديدة: {e}")
+            await query.message.reply_text(text, parse_mode="HTML")
         return
 
     # ---------- باقي الأزرار العامة ----------
