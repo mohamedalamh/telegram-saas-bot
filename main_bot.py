@@ -20,6 +20,21 @@ except Exception:
 
 PHONE, CODE, PASSWORD = range(3)
 
+async def show_welcome(update: Update, user_name: str):
+    text = (
+        f"😁👋 ❛ ≽ السلام عليكم ورحمة الله وبركاته ≼\n\n"
+        f"👤 ❛ ≽ حياك الله يا {user_name} 🎊، أهلاً وسهلاً ومرحباً بك. ≼\n\n"
+        f"🤖 ❛ ≽ البوت المميز والحصري في تقديم خدمة صيد الأرقام مع فك الحظر التلقائي عن الأرقام. ≼\n\n"
+        f"📮 ❛ ≽ كل ما عليك فقط أن تشترك في البوت لتبدأ رحلت صيد الأرقام العالمية والدولية 📱 ≼\n\n"
+        f"ماذا تنتظر...!؟\n≽ ≽ ≽ اضغط هنا وابدأ 🔻"
+    )
+    keyboard = [[InlineKeyboardButton("اشترك الان", callback_data="subscribe")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    if update.message:
+        await update.message.reply_text(text, reply_markup=reply_markup)
+    elif update.callback_query:
+        await update.callback_query.message.edit_text(text, reply_markup=reply_markup)
+
 def get_correct_table_name():
     return "user_bots"
 
@@ -31,7 +46,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if db_data[3] == 1:
             await update.message.reply_text("❌ عذراً، تم إيقاف حسابك وحظرك من استخدام المنصة من قبل الإدارة.")
             return
-    await show_dashboard(update, user_id, user_name)
+        # تحقق من الاشتراك
+        expires_at = db_data[2]
+        if expires_at:
+            if isinstance(expires_at, str):
+                expires_at = datetime.fromisoformat(expires_at.replace("Z", ""))
+            if expires_at.replace(tzinfo=None) > datetime.now(timezone.utc).replace(tzinfo=None):
+                await show_dashboard(update, user_id, user_name)
+                return
+    # لا يوجد اشتراك ساري
+    await show_welcome(update, user_name)
 
 async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -385,6 +409,95 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
 
+    elif query.data.startswith("confirm_pay_"):
+    if user_id != ADMIN_ID:
+        await query.answer("غير مصرح", show_alert=True)
+        return
+    target_id = int(query.data.split("_")[2])
+    pending = db.get_pending_subscription(target_id)
+    if not pending:
+        await query.answer("لا يوجد طلب معلق.", show_alert=True)
+        return
+    plan, method, amount, wallet, _ = pending
+    # إضافة 30 يومًا
+    db.add_days_to_user(target_id, 30)
+    db.delete_pending_subscription(target_id)
+    # إرسال رسالة النجاح للمستخدم
+    new_data = db.get_bot(target_id)
+    if new_data:
+        expires_at = new_data[2]
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at.replace("Z", ""))
+        expiry_str = expires_at.strftime("%Y-%m-%d %H:%M:%S")
+        success_msg = (
+            f"🗒 ❛ ≽ تم دفع الفاتورة بنجاح.. ≼\n\n"
+            f"🔋 ❛ نوعية الإشتراك ≽ DurianRCS ({plan}) ≼\n"
+            f"⏰ ❛ الأيام المضافة ≽ 30 يوم ≼\n"
+            f"⏰ ❛ اشتراكك الجديد ينتهي في ≽ {expiry_str} ≼"
+        )
+        await context.bot.send_message(chat_id=target_id, text=success_msg)
+        await query.answer("تم تأكيد الدفع وإرسال الإشعار.", show_alert=True)
+    else:
+        await query.answer("المستخدم غير موجود.", show_alert=True)
+    await query.message.edit_text(query.message.text + "\n\n✅ تم التأكيد.")
+    return
+    elif query.data == "subscribe":
+    keyboard = [
+        [InlineKeyboardButton("DurianRCS (حساب واحد) - 4$", callback_data="plan_1")],
+        [InlineKeyboardButton("DurianRCS (حسابين) - 6$", callback_data="plan_2")],
+        [InlineKeyboardButton("DurianRCS (3 حسابات) - 8$", callback_data="plan_3")],
+    ]
+    await query.message.edit_text("اختر خطة الاشتراك:", reply_markup=InlineKeyboardMarkup(keyboard))
+    return
+
+elif query.data.startswith("plan_"):
+    plan_num = query.data.split("_")[1]
+    context.user_data["selected_plan"] = plan_num
+    prices = {"1": "4", "2": "6", "3": "8"}
+    price = prices[plan_num]
+    text = f"📋 اختر طريقة الدفع لـ DurianRCS ({'حساب واحد' if plan_num=='1' else 'حسابين' if plan_num=='2' else '3 حسابات'}):\n🔹 قيمة الاشتراك : {price}$"
+    keyboard = [
+        [InlineKeyboardButton(f"الدفع ب USDT (Binance)", callback_data=f"pay_usdt_{plan_num}")],
+        [InlineKeyboardButton(f"الدفع ب TRX (Tron)", callback_data=f"pay_trx_{plan_num}")],
+    ]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    return
+
+elif query.data.startswith("pay_"):
+    _, method, plan_num = query.data.split("_")
+    crypto_prices = {
+        "1": {"USDT": "4", "TRX": "25.01"},
+        "2": {"USDT": "6", "TRX": "37.51"},
+        "3": {"USDT": "8", "TRX": "50.02"},
+    }
+    amount = crypto_prices[plan_num][method]
+    wallets = {
+        "USDT": "TYourUSDTAddressHere",   # ← استبدل بمحفظتك
+        "TRX": "TSDqje1oWAcDY8Q5XzUDLWksWMSPqxv3PB",  # مثال
+    }
+    wallet = wallets[method]
+    currency = "USDT" if method == "usdt" else "TRX"
+    plan_name = "حساب واحد" if plan_num == "1" else "حسابين" if plan_num == "2" else "3 حسابات"
+    db.add_pending_subscription(user_id, plan_name, currency, amount, wallet)
+    # إرسال إشعار للإدارة
+    admin_msg = (
+        f"🔔 طلب اشتراك جديد:\n"
+        f"👤 المستخدم: `{user_id}`\n"
+        f"📦 الخطة: {plan_name}\n"
+        f"💲 المبلغ: {amount} {currency}\n"
+        f"📅 الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    )
+    admin_keyboard = [[InlineKeyboardButton("✅ تأكيد الدفع", callback_data=f"confirm_pay_{user_id}")]]
+    await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=InlineKeyboardMarkup(admin_keyboard))
+    # رد للمستخدم
+    text = (
+        f"💰 لإيداع {amount} {currency}، يرجى إرسال المبلغ إلى العنوان التالي خلال 10 دقائق:\n\n"
+        f"<code>{wallet}</code>\n\n"
+        f"✅ سيتم تفعيل الاشتراك فورًا بعد وصول {amount} {currency}"
+    )
+    await query.message.edit_text(text, parse_mode="HTML")
+    return
+    
     if query.data == "main_menu":
         await show_dashboard(update, user_id, user_name)
         return
