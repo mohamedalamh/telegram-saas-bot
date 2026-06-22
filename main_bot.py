@@ -408,7 +408,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = [[InlineKeyboardButton("🔙 العودة للوحة الإدارة", callback_data="admin_panel")]]
             await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
-
     elif query.data.startswith("confirm_pay_"):
     if user_id != ADMIN_ID:
         await query.answer("غير مصرح", show_alert=True)
@@ -419,10 +418,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("لا يوجد طلب معلق.", show_alert=True)
         return
     plan, method, amount, wallet, _ = pending
-    # إضافة 30 يومًا
     db.add_days_to_user(target_id, 30)
     db.delete_pending_subscription(target_id)
-    # إرسال رسالة النجاح للمستخدم
     new_data = db.get_bot(target_id)
     if new_data:
         expires_at = new_data[2]
