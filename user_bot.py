@@ -244,17 +244,25 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
     elif data == "manage_accounts":
         await show_manage_accounts(update, user_id)
         return
-    elif data.startswith("toggle_site_"):
-        acc_id = int(data.split("_")[2])
-        db.toggle_site_account(user_id, acc_id)
-        await query.answer("✅ تم تبديل حالة الحساب", show_alert=False)
-        await show_manage_accounts(update, user_id)
-        return
-    elif data.startswith("delete_site_"):
-        acc_id = int(data.split("_")[2])
-        accounts = db.get_all_site_accounts(user_id)
-        if len(accounts) == 1:
-            await query.answer("❌ لا يمكن حذف الحساب الوحيد. أضف حساباً آخر أولاً.", show_alert=True)
+    elif data.startswith(("code_", "unban_", "cancel_", "rate_", "weak_")):
+        parts = data.split("_", 2)
+        if len(parts) < 3:
+            await safe_answer(query, "⚠️ هذه الأزرار القديمة غير مدعومة...", show_alert=True)
+            return
+        action = parts[0]
+        username = parts[1]
+        phone = parts[2]
+
+        # استخدام مالك البوت للبحث عن الحساب
+        owner_id = context.application.user_data.get("owner_id", user_id)
+        accounts = db.get_all_site_accounts(owner_id)
+        api_key = None
+        for acc_id, acc_username, acc_api_key, _ in accounts:
+            if acc_username == username:
+                api_key = acc_api_key
+                break
+        if not api_key:
+            await safe_answer(query, "❌ الحساب المرتبط بهذا الرقم غير موجود!", show_alert=True)
             return
         db.delete_site_account(user_id, acc_id)
         await query.answer("🗑️ تم حذف الحساب", show_alert=False)
@@ -288,13 +296,13 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         channel = db.get_hunting_channel(user_id)
         countries = db.get_user_countries(user_id)
         if not active_accounts:
-            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يجب أن يكون لديك حساب نشط واحد على الأقل. انتقل إلى الإعدادات ➔ إدارة الحسابات.")
+            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! ...")
             return
         if not channel:
-            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى إضافة قناة الصيد أولاً.")
+            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! ...")
             return
         if not countries:
-            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! يرجى تفعيل دولة واحدة على الأقل.")
+            await query.message.reply_text("❌ لا يمكن تشغيل الصيد! ...")
             return
         username_first = active_accounts[0][0]
         api_key_first = active_accounts[0][1]
@@ -303,6 +311,10 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         if current_jobs:
             await query.message.reply_text("ℹ️ الصيد يعمل بالفعل.")
             return
+
+        # تخزين معرف المالك
+        context.application.user_data["owner_id"] = user_id
+
         context.job_queue.run_repeating(
             check_and_hunt_numbers, interval=5, first=1, user_id=user_id, name=f"hunt_{user_id}"
         )
