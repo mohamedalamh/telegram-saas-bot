@@ -455,7 +455,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif query.data.startswith("pay_"):
-        _, method, plan_num = query.data.split("_")
+       _, method, plan_num = query.data.split("_")
+        method = method.upper()  # تحويل usdt/trx إلى USDT/TRX
         crypto_prices = {
             "1": {"USDT": "4", "TRX": "25.01"},
             "2": {"USDT": "6", "TRX": "37.51"},
