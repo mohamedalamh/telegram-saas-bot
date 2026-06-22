@@ -128,7 +128,7 @@ repeat_tracker = {}
 # معرف مالك البوت (يتم تخزينه عند بدء الصيد)
 bot_owner_id = None
 
-MAX_CONCURRENT_REQUESTS = 1
+MAX_CONCURRENT_REQUESTS = 2
 semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 # ==================== 1. القائمة الرئيسية ====================
 async def start_user_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -466,7 +466,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
         clean_country = str(country_code).strip()
         try:
             async with semaphore:
-               await asyncio.sleep(1.5) 
+               await asyncio.sleep(0.8) 
                result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
             if not result or result.get("status") != "success":
                 return
@@ -476,16 +476,17 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
 
             # --- الفحص السريع (اختياري، يمكن تعطيله مؤقتًا للسرعة) ---
             status_text = "✅ الرقم بدون جلسة"
-            # للتسريع: يمكنك تعليق سطر الفحص التالي إذا كان الفحص بطيئًا جدًا
-            # try:
-            #     account_checker = await telegram_checker.get_available_account()
-            #     if account_checker:
-            #         check_result = await telegram_checker.check_phone(account_checker, phone_number)
-            #         raw_status = check_result.get("status_text", "")
-            #         if "HAS_SESSION" in raw_status or "محظور" in raw_status:
-            #             status_text = f"⚠️ {raw_status}"
-            # except Exception:
-            #     pass
+            try:
+                account_checker = await telegram_checker.get_available_account()
+                if account_checker:
+                    check_result = await telegram_checker.check_phone(account_checker, phone_number)
+                    raw_status = check_result.get("status_text", "")
+                    if "HAS_SESSION" in raw_status or "محظور" in raw_status:
+                        status_text = f"⚠️ {raw_status}"
+                    else:
+                        status_text = "✅ الرقم بدون جلسة"  # صريح
+            except Exception as e:
+                logger.warning(f"فحص الرقم {phone_number} فشل (سيتم افتراض أنه بدون جلسة): {e}")
 
             # --- تحديد الدولة والعلم (باستخدام COUNTRY_INFO السريعة) ---
             country_name = clean_country.upper()
