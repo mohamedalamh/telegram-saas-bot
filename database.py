@@ -412,6 +412,50 @@ def delete_user_country(user_id, country_name):
         cursor.close()
         conn.close()
 
+# ---------- نظام الاشتراكات المعلقة ----------
+def add_pending_subscription(user_id, plan, payment_method, amount_crypto, wallet_address):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO pending_subscriptions (user_id, plan, payment_method, amount_crypto, wallet_address)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (user_id) DO UPDATE SET
+            plan = EXCLUDED.plan,
+            payment_method = EXCLUDED.payment_method,
+            amount_crypto = EXCLUDED.amount_crypto,
+            wallet_address = EXCLUDED.wallet_address,
+            created_at = CURRENT_TIMESTAMP
+    """, (user_id, plan, payment_method, amount_crypto, wallet_address))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def get_pending_subscription(user_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT plan, payment_method, amount_crypto, wallet_address, created_at FROM pending_subscriptions WHERE user_id = %s", (user_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row
+
+def delete_pending_subscription(user_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM pending_subscriptions WHERE user_id = %s", (user_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def get_all_pending_subscriptions():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, plan, payment_method, amount_crypto, wallet_address, created_at FROM pending_subscriptions ORDER BY created_at DESC")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
 def get_all_checkers():
     conn = get_connection()
     cursor = conn.cursor()
