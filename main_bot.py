@@ -194,11 +194,12 @@ async def show_checker_management(update: Update):
         text = "👥 **قائمة حسابات الفحص:**\n\nاضغط على أي حساب لتبديل حالته بين مفعل ومعطل."
         keyboard = []
         for acc_id, phone, is_active in accounts:
-            status_emoji = "🟢 مفعل" if is_active else "🔴 معطل"
+            status_emoji = "🟢" if is_active else "🔴"
             btn_text = f"{status_emoji} - {phone}"
-            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"toggle_chk_{acc_id}")])
-        keyboard.append([InlineKeyboardButton("🔙 العودة للوحة الإدارة", callback_data="admin_panel")])
-
+            keyboard.append([
+                InlineKeyboardButton(btn_text, callback_data=f"toggle_chk_{acc_id}"),
+                InlineKeyboardButton("🗑️ حذف", callback_data=f"delete_chk_{acc_id}")
+            ])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
@@ -340,6 +341,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_admin_panel(update)
             return
         elif query.data == "adm_manage_checkers":
+            await show_checker_management(update)
+            return
+        elif query.data.startswith("delete_chk_"):
+            acc_id = int(query.data.replace("delete_chk_", ""))
+            db.delete_checker(acc_id)
+            await query.answer("🗑️ تم حذف الحساب الفاحص", show_alert=False)
             await show_checker_management(update)
             return
         elif query.data.startswith("toggle_chk_"):
