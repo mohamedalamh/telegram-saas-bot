@@ -480,17 +480,18 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
 
                     keyboard = [
                         [
-                            InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{phone_number}"),
-                            InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{phone_number}")
+                            InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{username}_{phone_number}"),
+                            InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{username}_{phone_number}")
                         ],
                         [
-                            InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{phone_number}"),
-                            InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{phone_number}")
+                            InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{username}_{phone_number}"),
+                            InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{username}_{phone_number}")
                         ],
                         [
-                            InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{phone_number}")
+                            InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{username}_{phone_number}")
                         ]
                     ]
+                    
                     reply_markup = InlineKeyboardMarkup(keyboard)
 
                     await context.bot.send_message(
