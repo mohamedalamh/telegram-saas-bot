@@ -13,7 +13,19 @@ class LoginManager:
         # الحسابات التي تنتظر إدخال الكود أو كلمة المرور
         self.pending = {}
 
+    async def _cleanup_phone(self, phone):
+        """إزالة أي جلسة سابقة لنفس الرقم"""
+        if phone in self.pending:
+            try:
+                await self.pending[phone]["client"].disconnect()
+            except:
+                pass
+            del self.pending[phone]
+
     async def send_code(self, phone, api_id, api_hash):
+        # تنظيف أي عملية سابقة لنفس الرقم
+        await self._cleanup_phone(phone)
+
         client = TelegramClient(StringSession(), int(api_id), api_hash)
         await client.connect()
         try:
@@ -39,7 +51,7 @@ class LoginManager:
 
     async def verify_code(self, phone, code):
         if phone not in self.pending:
-            raise Exception("لا يوجد طلب تسجيل دخول لهذا الرقم.")
+            raise Exception("لا يوجد طلب تسجيل دخول لهذا الرقم. ابدأ العملية من جديد.")
         
         data = self.pending[phone]
         client = data["client"]
@@ -53,7 +65,7 @@ class LoginManager:
         except PhoneCodeExpiredError:
             await client.disconnect()
             del self.pending[phone]
-            raise Exception("انتهت صلاحية الكود.")
+            raise Exception("انتهت صلاحية الكود. ابدأ العملية من جديد.")
         except FloodWaitError:
             raise
         except Exception:
@@ -99,25 +111,21 @@ class LoginManager:
         return result
 
     async def cancel_login(self, phone):
-        """ إلغاء عملية تسجيل الدخول. """
         if phone not in self.pending:
             return
-        data = self.pending[phone]
         try:
-            await data["client"].disconnect()
-        except Exception:
+            await self.pending[phone]["client"].disconnect()
+        except:
             pass
         del self.pending[phone]
 
     async def cleanup(self):
-        """ إغلاق جميع الاتصالات المؤقتة. """
         phones = list(self.pending.keys())
         for phone in phones:
             try:
                 await self.pending[phone]["client"].disconnect()
-            except Exception:
+            except:
                 pass
         self.pending.clear()
 
-# إنشاء كائن التحكم العام خارج الكلاس بمحاذاة الصفر تماماً
 login_manager = LoginManager()
