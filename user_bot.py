@@ -94,7 +94,6 @@ for c in ALL_COUNTRIES:
     emoji = parts[-1] if len(parts) > 1 else "🌐"
     name = " ".join(parts[:-1]) if len(parts) > 1 else c["name"]
     COUNTRY_INFO[code] = {"name": name, "emoji": emoji}
-# تحديث بعض الأسماء يدويًا
 COUNTRY_INFO.update({
     "RU": {"name": "روسيا", "emoji": "🇷🇺"},
     "US": {"name": "أمريكا", "emoji": "🇺🇸"},
@@ -128,6 +127,7 @@ COUNTRY_INFO.update({
 repeat_tracker = {}
 # معرف مالك البوت (يتم تخزينه عند بدء الصيد)
 bot_owner_id = None
+
 # ==================== 1. القائمة الرئيسية ====================
 async def start_user_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "🔰 مرحباً بك في بوت صيد الأرقام 🔰\n\nاختر أحد الخيارات أدناه للبدء:"
@@ -233,12 +233,10 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global bot_owner_id
     query = update.callback_query
-    # لا نرد هنا فارغًا! سنرد في كل إجراء لمرة واحدة فقط
     user_id = query.from_user.id
     data = query.data
     logger.warning(f"CALLBACK RECEIVED: user={user_id}, data={data}")
 
-    # الأزرار العامة
     if data == "main_menu":
         await start_user_bot(update, context)
     elif data == "bot_settings":
@@ -246,26 +244,17 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
     elif data == "manage_accounts":
         await show_manage_accounts(update, user_id)
         return
-    elif data.startswith(("code_", "unban_", "cancel_", "rate_", "weak_")):
-        parts = data.split("_", 2)
-        if len(parts) < 3:
-            await safe_answer(query, "⚠️ هذه الأزرار القديمة غير مدعومة...", show_alert=True)
-            return
-        action = parts[0]
-        username = parts[1]
-        phone = parts[2]
-
-        # استخدام مالك البوت للبحث عن الحساب
-        owner_id = bot_owner_id if bot_owner_id is not None else user_id
-
-        accounts = db.get_all_site_accounts(owner_id)
-        api_key = None
-        for acc_id, acc_username, acc_api_key, _ in accounts:
-            if acc_username == username:
-                api_key = acc_api_key
-                break
-        if not api_key:
-            await safe_answer(query, "❌ الحساب المرتبط بهذا الرقم غير موجود!", show_alert=True)
+    elif data.startswith("toggle_site_"):
+        acc_id = int(data.split("_")[2])
+        db.toggle_site_account(user_id, acc_id)
+        await query.answer("✅ تم تبديل حالة الحساب", show_alert=False)
+        await show_manage_accounts(update, user_id)
+        return
+    elif data.startswith("delete_site_"):
+        acc_id = int(data.split("_")[2])
+        accounts = db.get_all_site_accounts(user_id)
+        if len(accounts) == 1:
+            await query.answer("❌ لا يمكن حذف الحساب الوحيد. أضف حساباً آخر أولاً.", show_alert=True)
             return
         db.delete_site_account(user_id, acc_id)
         await query.answer("🗑️ تم حذف الحساب", show_alert=False)
@@ -295,7 +284,6 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         await show_manage_countries(update, user_id)
         return
     elif data == "start_hunting":
-        global bot_owner_id
         active_accounts = db.get_active_site_accounts(user_id)
         channel = db.get_hunting_channel(user_id)
         countries = db.get_user_countries(user_id)
@@ -316,14 +304,11 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             await query.message.reply_text("ℹ️ الصيد يعمل بالفعل.")
             return
 
-        if not hasattr(context.application, 'user_data'):
-            context.application.user_data = {}
-            
-        context.application.user_data["owner_id"] = user_id
         bot_owner_id = user_id
 
         context.job_queue.run_repeating(
             check_and_hunt_numbers, interval=5, first=1, user_id=user_id, name=f"hunt_{user_id}"
+        )
         db.set_hunting_status(user_id, 1)
         accounts_str = "\n".join([f"👤 {u}" for u, _ in active_accounts])
         await query.message.reply_text(
@@ -372,20 +357,18 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         db.add_user_country(user_id, country_code)
         await query.message.reply_text(f"🟢 تم إضافة وتفعيل دولة **{country_name}** بنجاح لتفعيل التليجرام!")
         await start_user_bot(update, context)
-    # ------------- معالجة أزرار الأرقام -------------
     elif data.startswith(("code_", "unban_", "cancel_", "rate_", "weak_")):
-        # الصيغة الجديدة: action_username_phone
         parts = data.split("_", 2)
         if len(parts) < 3:
-            # الصيغة القديمة (بدون username) موجودة في رسائل سابقة؛ نعطي تنبيه
-            await safe_answer(query, "⚠️ هذه الأزرار القديمة غير مدعومة، انتظر أرقاماً جديدة.", show_alert=True)
+            await safe_answer(query, "⚠️ هذه الأزرار القديمة غير مدعومة...", show_alert=True)
             return
         action = parts[0]
         username = parts[1]
         phone = parts[2]
 
-        # جلب api_key لهذا الحساب من قاعدة بيانات المستخدم
-        accounts = db.get_all_site_accounts(user_id)
+        # استخدام مالك البوت للبحث عن الحساب
+        owner_id = bot_owner_id if bot_owner_id is not None else user_id
+        accounts = db.get_all_site_accounts(owner_id)
         api_key = None
         for acc_id, acc_username, acc_api_key, _ in accounts:
             if acc_username == username:
@@ -396,7 +379,6 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             return
 
         if action == "code":
-            # رد واحد فوري مع تنبيه "جاري طلب الكود"
             await safe_answer(query, "⏳ جاري طلب الكود يرجى الانتظار", show_alert=True)
             try:
                 sms_res = await DurianAPI.get_sms(username, api_key, phone)
@@ -408,18 +390,15 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
                     except Exception:
                         pass
                 else:
-                    # فشل جلب الكود، نرسل رسالة جديدة بدلاً من تعديل التنبيه (لأننا لا نستطيع الرد مرتين)
                     await query.message.reply_text(f"ℹ️ {sms_res['message']}")
             except Exception as e:
                 logger.error(f"Error fetching SMS for {phone}: {e}")
                 await query.message.reply_text("❌ فشل جلب الكود، حاول لاحقًا.")
 
         elif action == "cancel":
-            # إلغاء الرقم
             try:
                 success = await DurianAPI.cancel_number(username, api_key, phone)
                 if success:
-                    # حذف الرسالة من القناة
                     try:
                         await query.message.delete()
                     except Exception:
@@ -433,14 +412,11 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
         elif action == "unban":
             await safe_answer(query, "⚙️ جاري إرسال طلب فك الحظر...", show_alert=True)
-
         elif action == "rate":
             await safe_answer(query, "📊 نسبة وصول الأكواد الحالية لهذا النطاق هي: 94%", show_alert=True)
-
         elif action == "weak":
             await safe_answer(query, "🧌 تم تصنيف جودة هذا النطاق كـ (ضعيفة) مؤقتاً.", show_alert=True)
 
-# دالة مساعدة للرد الآمن
 async def safe_answer(query, text=None, show_alert=False):
     try:
         await query.answer(text=text, show_alert=show_alert)
@@ -467,7 +443,7 @@ async def show_manage_countries(update: Update, user_id: int):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
-# ==================== 7. دالة الصيد والضخ (الشكل الجديد) ====================
+# ==================== 7. دالة الصيد والضخ ====================
 async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.user_id
@@ -486,80 +462,4 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
         for country_code in countries:
             clean_country = str(country_code).strip()
             try:
-                result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project_id="0257")
-                if result and result.get("status") == "success":
-                    phone_number = result.get("number")
-
-                    # --- الفحص ---
-                    status_text = "✅ الرقم بدون جلسة"
-                    try:
-                        account_checker = await telegram_checker.get_available_account()
-                        if account_checker:
-                            check_result = await telegram_checker.check_phone(account_checker, phone_number)
-                            raw_status = check_result.get("status_text", "")
-                            if "HAS_SESSION" in raw_status or "محظور" in raw_status:
-                                status_text = f"⚠️ {raw_status}"
-                    except Exception:
-                        pass
-
-                    # --- تحديد الدولة والعلم ---
-                    country_name = clean_country.upper()
-                    country_flag = "🌐"
-                    found = False
-                    for prefix, info in COUNTRY_MAP.items():
-                        if clean_country.lower() == prefix.lower() or phone_number.replace("+", "").startswith(prefix):
-                            country_name = info["name"]
-                            country_flag = info["emoji"]
-                            found = True
-                            break
-                    if not found and clean_country.upper() in COUNTRY_INFO:
-                        info = COUNTRY_INFO[clean_country.upper()]
-                        country_name = info["name"]
-                        country_flag = info["emoji"]
-
-                    # --- تحديث عداد التكرار ---
-                    repeat_tracker[user_id][phone_number] = repeat_tracker[user_id].get(phone_number, 0) + 1
-                    repeat_count = repeat_tracker[user_id][phone_number]
-
-                    # --- صياغة الرسالة ---
-                    message_text = (
-                        f"🔰 تـم شـراء رقـم جـديـد مـن DurianRCS 🔰\n\n"
-                        f"    - الـرقـــــم : <code>{phone_number}</code>\n"
-                        f"    - الـدولـة : {country_name} {country_flag}\n"
-                        f"    - الـحـالـة : {status_text}\n"
-                        f"    - تـكـرار نـزول الـرقـم : {repeat_count} مـرة\n"
-                        f"    - الــكـــود : قـيـد الإنـتـظـار ❗️"
-                    )
-
-                    keyboard = [
-                        [
-                            InlineKeyboardButton("- نسبة الوصول .", callback_data=f"rate_{username}_{phone_number}"),
-                            InlineKeyboardButton("- ضعيفه 🧌 .", callback_data=f"weak_{username}_{phone_number}")
-                        ],
-                        [
-                            InlineKeyboardButton("- طلب الكود .", callback_data=f"code_{username}_{phone_number}"),
-                            InlineKeyboardButton("- فك حظر .", callback_data=f"unban_{username}_{phone_number}")
-                        ],
-                        [
-                            InlineKeyboardButton("- الغاء الرقم .", callback_data=f"cancel_{username}_{phone_number}")
-                        ]
-                    ]
-                    
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-
-                    await context.bot.send_message(
-                        chat_id=channel,
-                        text=message_text,
-                        parse_mode=ParseMode.HTML,
-                        reply_markup=reply_markup
-                    )
-            except Exception as e:
-                logger.error(f"Error for user {user_id}, account {username}: {e}")
-                continue
-
-def create_user_app(token: str):
-    app = Application.builder().token(token).build()
-    app.add_handler(CommandHandler("start", start_user_bot))
-    app.add_handler(CallbackQueryHandler(user_bot_callback_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_inputs))
-    return app
+                result = await DurianAPI.order_number_by_name(username, api_key, clean_country, project
