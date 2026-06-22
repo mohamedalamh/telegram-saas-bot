@@ -319,8 +319,6 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             f"🚀 تم تشغيل الصيد بنجاح!\nالحسابات: {', '.join([u for u, _ in active_accounts])}\nالقناة: {channel}",
             show_alert=True
         )
-        # (اختياري) رسالة نصية مختصرة للتأكيد، يمكن حذفها إن أردت
-        await query.message.reply_text("✅ تم تشغيل الصيد.")
     elif data == "stop_hunting":
         db.set_hunting_status(user_id, 0)
         current_jobs = context.job_queue.get_jobs_by_name(f"hunt_{user_id}")
