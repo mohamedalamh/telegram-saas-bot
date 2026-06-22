@@ -127,6 +127,8 @@ COUNTRY_INFO.update({
 # عداد مؤقت لتكرار نزول الرقم
 repeat_tracker = {}
 
+# معرف مالك البوت (يتم تخزينه عند بدء الصيد)
+bot_owner_id = None
 # ==================== 1. القائمة الرئيسية ====================
 async def start_user_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "🔰 مرحباً بك في بوت صيد الأرقام 🔰\n\nاختر أحد الخيارات أدناه للبدء:"
@@ -254,7 +256,8 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         phone = parts[2]
 
         # استخدام مالك البوت للبحث عن الحساب
-        owner_id = context.application.user_data.get("owner_id", user_id)
+        global bot_owner_id
+        owner_id = bot_owner_id if bot_owner_id is not None else user_id
         accounts = db.get_all_site_accounts(owner_id)
         api_key = None
         for acc_id, acc_username, acc_api_key, _ in accounts:
@@ -313,7 +316,8 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
             return
 
         # تخزين معرف المالك
-        context.application.user_data["owner_id"] = user_id
+        global bot_owner_id
+        bot_owner_id = user_id
 
         context.job_queue.run_repeating(
             check_and_hunt_numbers, interval=5, first=1, user_id=user_id, name=f"hunt_{user_id}"
