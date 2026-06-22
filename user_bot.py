@@ -475,7 +475,7 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                 return
 
             # --- الفحص السريع (اختياري، يمكن تعطيله مؤقتًا للسرعة) ---
-            status_text = "✅ الرقم بدون جلسة"
+            status_text = "🔴 حالة غير معروفة"  # افتراضي إذا لم يتم الفحص
             try:
                 account_checker = await telegram_checker.get_available_account()
                 if account_checker:
@@ -484,10 +484,11 @@ async def check_and_hunt_numbers(context: ContextTypes.DEFAULT_TYPE):
                     if "HAS_SESSION" in raw_status or "محظور" in raw_status:
                         status_text = f"⚠️ {raw_status}"
                     else:
-                        status_text = "✅ الرقم بدون جلسة"  # صريح
+                        status_text = "✅ الرقم بدون جلسة"  # تم الفحص بنجاح
+                # إذا لم يكن هناك حساب فاحص، يبقى "🔴 حالة غير معروفة"
             except Exception as e:
-                logger.warning(f"فحص الرقم {phone_number} فشل (سيتم افتراض أنه بدون جلسة): {e}")
-
+                logger.warning(f"فحص الرقم {phone_number} فشل: {e}")
+                # يبقى "🔴 حالة غير معروفة"
             # --- تحديد الدولة والعلم (باستخدام COUNTRY_INFO السريعة) ---
             country_name = clean_country.upper()
             country_flag = "🌐"
