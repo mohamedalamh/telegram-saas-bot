@@ -166,6 +166,18 @@ def init_db():
         except:
             pass
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pending_subscriptions (
+            user_id BIGINT PRIMARY KEY,
+            plan TEXT NOT NULL,
+            payment_method TEXT NOT NULL,
+            amount_crypto TEXT NOT NULL,
+            wallet_address TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    
     cursor.close()
     conn.close()
 
