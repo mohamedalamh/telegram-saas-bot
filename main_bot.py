@@ -400,7 +400,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
         # زر تأكيد الدفع (للأدمن فقط)
-        elif query.data.startswith("confirm_pay_")::
+        elif query.data.startswith("confirm_pay_"):
             if user_id != ADMIN_ID:
                 await query.answer("غير مصرح", show_alert=True)
                 return
