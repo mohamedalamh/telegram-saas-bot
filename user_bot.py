@@ -126,7 +126,8 @@ COUNTRY_INFO.update({
 
 # عداد مؤقت لتكرار نزول الرقم
 repeat_tracker = {}
-
+# معرف مالك البوت (يتم تخزينه عند بدء الصيد)
+bot_owner_id = None
 # ==================== 1. القائمة الرئيسية ====================
 async def start_user_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "🔰 مرحباً بك في بوت صيد الأرقام 🔰\n\nاختر أحد الخيارات أدناه للبدء:"
@@ -230,6 +231,7 @@ async def handle_user_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 # ==================== 5. معالج الأحداث والأزرار ====================
 async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global bot_owner_id
     query = update.callback_query
     # لا نرد هنا فارغًا! سنرد في كل إجراء لمرة واحدة فقط
     user_id = query.from_user.id
@@ -254,10 +256,8 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         phone = parts[2]
 
         # استخدام مالك البوت للبحث عن الحساب
-        owner_id = user_id  # افتراضي
-        if hasattr(context.application, 'user_data') and context.application.user_data:
-            owner_id = context.application.user_data.get("owner_id", user_id)
-        
+        owner_id = bot_owner_id if bot_owner_id is not None else user_id
+
         accounts = db.get_all_site_accounts(owner_id)
         api_key = None
         for acc_id, acc_username, acc_api_key, _ in accounts:
@@ -295,6 +295,7 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
         await show_manage_countries(update, user_id)
         return
     elif data == "start_hunting":
+        global bot_owner_id
         active_accounts = db.get_active_site_accounts(user_id)
         channel = db.get_hunting_channel(user_id)
         countries = db.get_user_countries(user_id)
@@ -317,11 +318,12 @@ async def user_bot_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
         if not hasattr(context.application, 'user_data'):
             context.application.user_data = {}
+            
         context.application.user_data["owner_id"] = user_id
+        bot_owner_id = user_id
 
         context.job_queue.run_repeating(
             check_and_hunt_numbers, interval=5, first=1, user_id=user_id, name=f"hunt_{user_id}"
-        )
         db.set_hunting_status(user_id, 1)
         accounts_str = "\n".join([f"👤 {u}" for u, _ in active_accounts])
         await query.message.reply_text(
