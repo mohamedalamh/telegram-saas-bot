@@ -63,9 +63,16 @@ class LoginManager:
         except PhoneCodeInvalidError:
             raise Exception("كود التحقق غير صحيح.")
         except PhoneCodeExpiredError:
-            await client.disconnect()
-            del self.pending[phone]
-            raise Exception("انتهت صلاحية الكود. ابدأ العملية من جديد.")
+            # إعادة إرسال الكود تلقائياً
+            try:
+                result = await client.send_code_request(phone)
+                data["phone_code_hash"] = result.phone_code_hash
+                # إعلام المستخدم بأن الكود انتهت صلاحيته وتم إرسال كود جديد
+                return {"status": "CODE_EXPIRED", "message": "انتهت صلاحية الكود. تم إرسال كود جديد، يرجى إدخاله."}
+            except Exception as e:
+                await client.disconnect()
+                del self.pending[phone]
+                raise Exception(f"فشل إعادة إرسال الكود: {e}")
         except FloodWaitError:
             raise
         except Exception:
