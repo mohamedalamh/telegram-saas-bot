@@ -455,42 +455,42 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif query.data.startswith("pay_"):
-       _, method, plan_num = query.data.split("_")
-       method = method.upper()  # تحويل usdt/trx إلى USDT/TRX
-        crypto_prices = {
-            "1": {"USDT": "4", "TRX": "25.01"},
-            "2": {"USDT": "6", "TRX": "37.51"},
-            "3": {"USDT": "8", "TRX": "50.02"},
-        }
-        amount = crypto_prices[plan_num][method]
-        wallets = {
-            "USDT": "864428425",
-            "TRX": "TCNZsLwJqUNhudt7XtC6XBLnWvKpKVLu61",
-        }
-        wallet = wallets[method]
-        currency = "USDT" if method == "usdt" else "TRX"
-        plan_name = "حساب واحد" if plan_num == "1" else "حسابين" if plan_num == "2" else "3 حسابات"
-        db.add_pending_subscription(user_id, plan_name, currency, amount, wallet)
-        admin_msg = (
-            f"🔔 طلب اشتراك جديد:\n"
-            f"👤 المستخدم: `{user_id}`\n"
-            f"📦 الخطة: {plan_name}\n"
-            f"💲 المبلغ: {amount} {currency}\n"
-            f"📅 الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        )
-        admin_keyboard = [[InlineKeyboardButton("✅ تأكيد الدفع", callback_data=f"confirm_pay_{user_id}")]]
-        await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=InlineKeyboardMarkup(admin_keyboard))
-        text = (
-            f"💰 لإيداع {amount} {currency}، يرجى إرسال المبلغ إلى العنوان التالي خلال 10 دقائق:\n\n"
-            f"<code>{wallet}</code>\n\n"
-            f"✅ سيتم تفعيل الاشتراك فورًا بعد وصول {amount} {currency}"
-        )
-        try:
-            await query.message.edit_text(text, parse_mode="HTML")
-        except Exception as e:
-            logger.warning(f"فشل تحرير رسالة الدفع، سيتم إرسال رسالة جديدة: {e}")
-            await query.message.reply_text(text, parse_mode="HTML")
-        return
+    _, method, plan_num = query.data.split("_")
+    method = method.upper()
+    crypto_prices = {
+        "1": {"USDT": "4", "TRX": "25.01"},
+        "2": {"USDT": "6", "TRX": "37.51"},
+        "3": {"USDT": "8", "TRX": "50.02"},
+    }
+    amount = crypto_prices[plan_num][method]
+    wallets = {
+        "USDT": "TYourUSDTAddressHere",
+        "TRX": "TSDqje1oWAcDY8Q5XzUDLWksWMSPqxv3PB",
+    }
+    wallet = wallets[method]
+    currency = "USDT" if method == "usdt" else "TRX"
+    plan_name = "حساب واحد" if plan_num == "1" else "حسابين" if plan_num == "2" else "3 حسابات"
+    db.add_pending_subscription(user_id, plan_name, currency, amount, wallet)
+    admin_msg = (
+        f"🔔 طلب اشتراك جديد:\n"
+        f"👤 المستخدم: `{user_id}`\n"
+        f"📦 الخطة: {plan_name}\n"
+        f"💲 المبلغ: {amount} {currency}\n"
+        f"📅 الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    )
+    admin_keyboard = [[InlineKeyboardButton("✅ تأكيد الدفع", callback_data=f"confirm_pay_{user_id}")]]
+    await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=InlineKeyboardMarkup(admin_keyboard))
+    text = (
+        f"💰 لإيداع {amount} {currency}، يرجى إرسال المبلغ إلى العنوان التالي خلال 10 دقائق:\n\n"
+        f"<code>{wallet}</code>\n\n"
+        f"✅ سيتم تفعيل الاشتراك فورًا بعد وصول {amount} {currency}"
+    )
+    try:
+        await query.message.edit_text(text, parse_mode="HTML")
+    except Exception as e:
+        logger.warning(f"فشل تحرير رسالة الدفع: {e}")
+        await query.message.reply_text(text, parse_mode="HTML")
+    return
 
     # ---------- باقي الأزرار العامة ----------
     if query.data == "main_menu":
