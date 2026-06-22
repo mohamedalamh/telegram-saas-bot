@@ -280,11 +280,13 @@ def save_bot(user_id, token):
 def add_days_to_user(user_id, days):
     conn = get_connection()
     cursor = conn.cursor()
+    # إنشاء سجل افتراضي إذا لم يكن موجودًا، ثم إضافة الأيام
     cursor.execute('''
-        UPDATE user_bots 
-        SET expires_at = GREATEST(expires_at, CURRENT_TIMESTAMP) + CAST(%s AS INTERVAL)
-        WHERE user_id = %s
-    ''', (f"{days} days", user_id))
+        INSERT INTO user_bots (user_id, token, is_active, expires_at, is_banned)
+        VALUES (%s, '', 0, CURRENT_TIMESTAMP + CAST(%s AS INTERVAL), 0)
+        ON CONFLICT (user_id) DO UPDATE
+        SET expires_at = GREATEST(user_bots.expires_at, CURRENT_TIMESTAMP) + CAST(%s AS INTERVAL)
+    ''', (user_id, f"{days} days", f"{days} days"))
     conn.commit()
     cursor.close()
     conn.close()
